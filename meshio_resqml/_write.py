@@ -1,0 +1,135 @@
+import meshio
+import numpy as np
+
+from resqpy.crs import Crs
+from resqpy.model import new_model
+from resqpy.property import GridPropertyCollection
+from resqpy.unstructured import UnstructuredGrid, HexaGrid
+
+
+meshio_type_to_faces = {
+    "tetra": {
+        "triangle": np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]]),
+    },
+    "pyramid": {
+        "triangle": np.array([[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]),
+        "quad": np.array([[0, 3, 2, 1]]),
+    },
+    "wedge": {
+        "triangle": np.array([[0, 2, 1], [3, 4, 5]]),
+        "quad": np.array([[0, 1, 4, 3], [1, 2, 5, 4], [0, 3, 5, 2]]),
+    },
+    "hexahedron": {
+        "quad": np.array(
+            [
+                [0, 3, 2, 1],
+                [4, 5, 6, 7],
+                [0, 1, 5, 4],
+                [1, 2, 6, 5],
+                [2, 3, 7, 6],
+                [0, 4, 7, 3],
+            ]
+        ),
+    },
+}
+
+
+def write(filename, mesh, uom=None):
+    uom = uom if uom else {}
+
+    # Generate face data
+    faces = [
+        [c[v] for v in meshio_type_to_faces[cell.type].values()]
+        for cell in mesh.cells
+        for c in cell.data
+    ]
+
+    face_map = {}
+    nodes_per_face = []
+    faces_per_cell = []
+
+    count = 0
+    for cell in faces:
+        for face_cell in cell:
+            for face in face_cell:
+                face_ = tuple(sorted(face))
+
+                try:
+                    idx = face_map[face_]
+
+                except KeyError:
+                    face_map[face_] = count
+                    nodes_per_face.append(face)
+                    idx = count
+                    count += 1
+
+                faces_per_cell.append(idx)
+
+    # Initialize model
+    model = new_model(filename)
+
+    # Generate unstructured grid
+    n_cells = sum(len(c) for c in mesh.cells)
+    cell_types = [c.type for c in mesh.cells]
+
+    if len(cell_types) == 1 and cell_types[0] == "hexahedron":
+        grid = HexaGrid(model, find_properties=False)
+        grid.set_cell_count(n_cells)
+        grid.face_count = len(face_map)
+
+        grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)
+        grid.faces_per_cell_cl = np.arange(1, grid.cell_count + 1, dtype=int) * 6
+        grid.faces_per_cell = np.array(faces_per_cell, dtype=int)
+        grid.nodes_per_face_cl = np.arange(1, grid.face_count + 1, dtype=int) * 4
+
+    else:
+        grid = UnstructuredGrid(model, find_properties=False, geometry_required=False)
+        raise NotImplementedError()
+
+    # Set point array
+    grid.points_cached = np.array(mesh.points)
+    grid.node_count = len(mesh.points)
+
+    # Determine orientation of cell faces w.r.t. cell inside
+    grid.cell_face_is_right_handed = np.zeros(grid.faces_per_cell.size, dtype=bool)
+
+    # Generate property collection
+    pc = None
+
+    if mesh.point_data or mesh.cell_data:
+        pc = GridPropertyCollection(grid)
+
+        for k, v in mesh.point_data.items():
+            _ = pc.add_cached_array_to_imported_list(
+                v,
+                source_info="meshio-resqml",
+                keyword=k,
+                indexable_element="points",
+                discrete=v[0].dtype.kind in {"i", "u"},
+                uom=uom[k] if k in uom else None,
+            )
+
+        for k, v in mesh.cell_data.items():
+            _ = pc.add_cached_array_to_imported_list(
+                np.concatenate(v),
+                source_info="meshio-resqml",
+                keyword=k,
+                indexable_element="cells",
+                discrete=v[0][0].dtype.kind in {"i", "u"},
+                uom=uom[k] if k in uom else None,
+            )
+
+    # Add a coordinate system
+    crs = Crs(model, z_inc_down=False)
+    grid.crs_uuid = crs.uuid
+
+    # Write files
+    crs.create_xml()
+    grid.write_hdf5(write_active=True)
+    grid.create_xml(write_active=True)
+    
+    if pc is not None:
+        pc.write_hdf5_for_imported_list()
+        pc.create_xml_for_imported_list_and_add_parts_to_model()
+
+    model.store_epc()

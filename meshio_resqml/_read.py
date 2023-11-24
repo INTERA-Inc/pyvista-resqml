@@ -1,0 +1,112 @@
+import itertools
+import meshio
+import numpy as np
+
+from resqpy.grid import any_grid, Grid
+from resqpy.model import Model
+from resqpy.property import Property
+from resqpy.unstructured import HexaGrid, UnstructuredGrid
+
+
+def read(filename, grid_uuid=None):
+    model = Model(filename)
+
+    if grid_uuid is None:
+        for uuid, part in zip(model.uuids(), model.parts()):
+            if "IjkGridRepresentation" in part or "UnstructuredGridRepresentation" in part:
+                grid_uuid = uuid
+                break
+
+    try:
+        grid = any_grid(model, uuid=grid_uuid)
+
+    except AssertionError:
+        raise ValueError("no compatible grid found.")
+
+    if isinstance(grid, Grid):
+        corner_points = grid.corner_points().reshape((grid.nk, grid.nj, grid.ni, 8, 3))
+        point_map = {}
+        cells = []
+        count = 0
+        for k, j, i in itertools.product(range(grid.nk), range(grid.nj), range(grid.ni)):
+            cell = []
+
+            for point in corner_points[k, j, i]:
+                point = tuple(point)
+
+                try:
+                    idx = point_map[point]
+
+                except KeyError:
+                    point_map[point] = count
+                    idx = count
+                    count += 1
+
+                cell.append(idx)
+
+            cells.append(cell)
+
+        points = np.array(list(point_map))
+        cells = np.array(cells, dtype=int)
+        cells[:, [6, 7, 2, 3]] = cells[:, [7, 6, 3, 2]]
+        cells = [("hexahedron", cells)]
+
+    elif isinstance(grid, HexaGrid):
+        points = grid.points_ref()
+        cells = np.empty((grid.cell_count, 8), dtype=int)
+
+        nodes_per_face = grid.nodes_per_face.reshape((grid.face_count, 4), order="C")
+        faces = grid.faces_per_cell.reshape((grid.cell_count, 6), order="C")
+
+        for i, cell in enumerate(faces):
+            cell = nodes_per_face[cell]
+            face1 = cell[0]
+            face2 = []
+
+            for line in (face1[:2], face1[2:]):
+                for face in cell[1:]:
+                    idx = np.intersect1d(face, line, assume_unique=True)
+
+                    if idx.size == 2:
+                        hankel = np.column_stack((face, np.append(face[1:], face[0])))
+                        face = face[::-1] if (hankel == line).all(axis=1).any() else face
+                        face2 += [i for i in face if i not in line]
+
+                        break
+
+            if len(face2) != 4:
+                raise ValueError(f"failed to identify opposing faces for cell {i}.")
+
+            cells[i] = np.concatenate((face1, face2))
+
+        cells = [("hexahedron", cells)]
+
+    else:
+        raise NotImplementedError()
+
+    point_data = {}
+    cell_data = {}
+
+    pc = grid.property_collection
+    if pc.number_of_parts():
+        for uuid, title in zip(pc.uuids(), pc.titles()):
+            prop = Property(model, uuid=uuid)
+            data = prop.array_ref().ravel(order="C")
+            data = (
+                data.astype(float)
+                if prop.is_continuous()
+                else data.astype(int)
+            )
+
+            if prop.is_points():
+                point_data[title] = data
+            
+            else:
+                cell_data[title] = [data]
+
+    return meshio.Mesh(
+        points=points,
+        cells=cells,
+        point_data=point_data,
+        cell_data=cell_data,
+    )
