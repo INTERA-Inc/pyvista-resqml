@@ -90,8 +90,27 @@ def write(filename, mesh, uom=None):
     grid.points_cached = np.array(mesh.points)
     grid.node_count = len(mesh.points)
 
-    # Determine orientation of cell faces w.r.t. cell inside
-    grid.cell_face_is_right_handed = np.zeros(grid.faces_per_cell.size, dtype=bool)
+    # Determine right handedness of cell faces w.r.t. cell center
+    # The calculation is based on the sign of the scalar product of the face normal vector
+    # and a vector defined by the cell center and any point on the face
+    cell_centers = np.concatenate([mesh.points[cell.data].mean(axis=1) for cell in mesh.cells])
+    face_to_cell_idx = np.searchsorted(
+        grid.faces_per_cell_cl - 1,
+        np.arange(grid.faces_per_cell.size),
+        side="left",
+    )
+
+    face_first_node = np.insert(grid.nodes_per_face_cl[:-1], 0, 0)
+    face_three_first_idx = (face_first_node[:, None] + np.arange(3)).ravel()
+    face_three_first_nodes = grid.nodes_per_face[face_three_first_idx].reshape((grid.face_count, 3))
+    tri_face_points = mesh.points[face_three_first_nodes[grid.faces_per_cell]]
+    
+    det = slicing_summing(
+        tri_face_points[:, 2] - tri_face_points[:, 1],
+        tri_face_points[:, 0] - tri_face_points[:, 1],
+        cell_centers[face_to_cell_idx] - tri_face_points[:, 1],
+    )
+    grid.cell_face_is_right_handed = det >= 0.0
 
     # Generate property collection
     pc = None
@@ -133,3 +152,19 @@ def write(filename, mesh, uom=None):
         pc.create_xml_for_imported_list_and_add_parts_to_model()
 
     model.store_epc()
+
+
+def slicing_summing(a, b, c):
+    """
+    Calculate scalar triple product.
+
+    Note
+    ----
+    See <https://stackoverflow.com/a/42386330/353337>.
+    
+    """
+    c0 = b[:, 1] * c[:, 2] - b[:, 2] * c[:, 1]
+    c1 = b[:, 2] * c[:, 0] - b[:, 0] * c[:, 2]
+    c2 = b[:, 0] * c[:, 1] - b[:, 1] * c[:, 0]
+
+    return a[:, 0] * c0 + a[:, 1] * c1 + a[:, 2] * c2
