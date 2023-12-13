@@ -157,8 +157,6 @@ def _read_hexagrid(grid: HexaGrid) -> tuple[ArrayLike, list[tuple[str, ArrayLike
 def _read_tetragrid(grid: TetraGrid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
     """Read a TetraGrid object."""
     points = grid.points_ref()
-    cells = np.empty((grid.cell_count, 4), dtype=int)
-
     nodes_per_face = grid.nodes_per_face.reshape((grid.face_count, 3), order="C")
     faces = grid.faces_per_cell.reshape((grid.cell_count, 4), order="C")
     cells = np.row_stack([np.unique(cell) for cell in nodes_per_face[faces]])
