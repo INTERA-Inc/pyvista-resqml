@@ -10,7 +10,7 @@ import pathlib
 from resqpy.grid import any_grid, Grid
 from resqpy.model import Model
 from resqpy.property import Property
-from resqpy.unstructured import HexaGrid, UnstructuredGrid
+from resqpy.unstructured import HexaGrid, TetraGrid, UnstructuredGrid
 
 
 def read(
@@ -52,6 +52,9 @@ def read(
 
     elif isinstance(grid, HexaGrid):
         points, cells = _read_hexagrid(grid)
+
+    elif isinstance(grid, TetraGrid):
+        points, cells = _read_tetragrid(grid)
 
     else:
         raise NotImplementedError()
@@ -142,10 +145,23 @@ def _read_hexagrid(grid: HexaGrid) -> tuple[ArrayLike, list[tuple[str, ArrayLike
                     break
 
         if len(face2) != 4:
-            raise ValueError(f"failed to identify opposing faces for cell {i}.")
+            raise ValueError(f"failed to identify opposing faces for cell {i}")
 
         cells[i] = np.concatenate((face1, face2))
 
     cells = [("hexahedron", cells)]
+
+    return points, cells
+
+
+def _read_tetragrid(grid: TetraGrid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
+    """Read a TetraGrid object."""
+    points = grid.points_ref()
+    cells = np.empty((grid.cell_count, 4), dtype=int)
+
+    nodes_per_face = grid.nodes_per_face.reshape((grid.face_count, 3), order="C")
+    faces = grid.faces_per_cell.reshape((grid.cell_count, 4), order="C")
+    cells = np.row_stack([np.unique(cell) for cell in nodes_per_face[faces]])
+    cells = [("tetra", cells)]
 
     return points, cells

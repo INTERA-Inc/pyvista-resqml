@@ -9,7 +9,7 @@ import pathlib
 from resqpy.crs import Crs
 from resqpy.model import new_model
 from resqpy.property import GridPropertyCollection
-from resqpy.unstructured import UnstructuredGrid, HexaGrid
+from resqpy.unstructured import UnstructuredGrid, HexaGrid, TetraGrid
 
 
 meshio_type_to_faces = {
@@ -106,15 +106,23 @@ def write(
     n_cells = sum(len(c) for c in cells)
     cell_types = [c.type for c in cells]
 
-    if len(cell_types) == 1 and cell_types[0] == "hexahedron":
-        grid = HexaGrid(model, find_properties=False)
+    if len(cell_types) == 1:
+        if cell_types[0] == "tetra":
+            grid = TetraGrid(model, find_properties=False)
+            face_count_per_cell = 4
+            node_count_per_face = 3
+
+        elif cell_types[0] == "hexahedron":
+            grid = HexaGrid(model, find_properties=False)
+            face_count_per_cell = 6
+            node_count_per_face = 4
+
         grid.set_cell_count(n_cells)
         grid.face_count = len(face_map)
-
         grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)
-        grid.faces_per_cell_cl = np.arange(1, grid.cell_count + 1, dtype=int) * 6
+        grid.faces_per_cell_cl = np.arange(1, grid.cell_count + 1, dtype=int) * face_count_per_cell
         grid.faces_per_cell = np.array(faces_per_cell, dtype=int)
-        grid.nodes_per_face_cl = np.arange(1, grid.face_count + 1, dtype=int) * 4
+        grid.nodes_per_face_cl = np.arange(1, grid.face_count + 1, dtype=int) * node_count_per_face
 
     else:
         grid = UnstructuredGrid(model, find_properties=False, geometry_required=False)
