@@ -59,10 +59,22 @@ def write(
     """
     uom = uom if uom else {}
 
+    # Filter out 1D and 2D cells
+    idx = [
+        i for i, cell in enumerate(mesh.cells)
+        if cell.type in {"tetra", "pyramid", "wedge", "hexahedron"}
+        or cell.type.startswith("polyhedron")
+    ]
+    if not idx:
+        raise ValueError("no 3D cell found in input mesh")
+
+    cells = [mesh.cells[i] for i in idx]
+    cell_data = {k: [v[i] for i in idx] for k, v in mesh.cell_data.items()}
+
     # Generate face data
     faces = [
         [c[v] for v in meshio_type_to_faces[cell.type].values()]
-        for cell in mesh.cells
+        for cell in cells
         for c in cell.data
     ]
 
@@ -91,8 +103,8 @@ def write(
     model = new_model(filename)
 
     # Generate unstructured grid
-    n_cells = sum(len(c) for c in mesh.cells)
-    cell_types = [c.type for c in mesh.cells]
+    n_cells = sum(len(c) for c in cells)
+    cell_types = [c.type for c in cells]
 
     if len(cell_types) == 1 and cell_types[0] == "hexahedron":
         grid = HexaGrid(model, find_properties=False)
@@ -115,7 +127,7 @@ def write(
     # Determine right handedness of cell faces w.r.t. cell center
     # The calculation is based on the sign of the scalar product of the face normal vector
     # and a vector defined by the cell center and any point on the face
-    cell_centers = np.concatenate([mesh.points[cell.data].mean(axis=1) for cell in mesh.cells])
+    cell_centers = np.concatenate([mesh.points[cell.data].mean(axis=1) for cell in cells])
     face_to_cell_idx = np.searchsorted(
         grid.faces_per_cell_cl - 1,
         np.arange(grid.faces_per_cell.size),
@@ -137,7 +149,7 @@ def write(
     # Generate property collection
     pc = None
 
-    if mesh.point_data or mesh.cell_data:
+    if mesh.point_data or cell_data:
         pc = GridPropertyCollection(grid)
 
         for k, v in mesh.point_data.items():
@@ -150,7 +162,7 @@ def write(
                 uom=uom[k] if k in uom else None,
             )
 
-        for k, v in mesh.cell_data.items():
+        for k, v in cell_data.items():
             _ = pc.add_cached_array_to_imported_list(
                 np.concatenate(v),
                 source_info="meshio-resqml",
