@@ -1,5 +1,10 @@
+from __future__ import annotations
+from typing import Optional, Union
+from numpy.typing import ArrayLike
+
 import meshio
 import numpy as np
+import pathlib
 
 from resqpy.crs import Crs
 from resqpy.model import new_model
@@ -34,7 +39,24 @@ meshio_type_to_faces = {
 }
 
 
-def write(filename, mesh, uom=None):
+def write(
+    filename: Union[str, pathlib.Path],
+    mesh: meshio.Mesh,
+    uom: Optional[dict] = None,
+) -> None:
+    """
+    Write RESQML EPC and H5 files.
+
+    Parameters
+    ----------
+    filename : str or :class:`pathlib.Path`
+        Output file name.
+    mesh : :class:`meshio.Mesh`
+        Mesh to export.
+    uom : dict or None, optional, default None
+        Unit of measures for each data arrays.
+
+    """
     uom = uom if uom else {}
 
     # Generate face data
@@ -154,7 +176,7 @@ def write(filename, mesh, uom=None):
     model.store_epc()
 
 
-def slicing_summing(a, b, c):
+def slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
     """
     Calculate scalar triple product.
 

@@ -1,6 +1,11 @@
+from __future__ import annotations
+from typing import Optional, Union
+from numpy.typing import ArrayLike
+
 import itertools
 import meshio
 import numpy as np
+import pathlib
 
 from resqpy.grid import any_grid, Grid
 from resqpy.model import Model
@@ -8,7 +13,26 @@ from resqpy.property import Property
 from resqpy.unstructured import HexaGrid, UnstructuredGrid
 
 
-def read(filename, grid_uuid=None):
+def read(
+    filename: Union[str, pathlib.Path],
+    grid_uuid: Optional[str] = None,
+) -> meshio.Mesh:
+    """
+    Read RESQML EPC file.
+
+    Parameters
+    ----------
+    filename : str or :class:`pathlib.Path`
+        Input file name.
+    grid_uuid : str or None, optional, default None
+        UUID of the grid to be imported.
+
+    Returns
+    -------
+    :class:`meshio.Mesh`
+        Output mesh.
+
+    """
     model = Model(filename)
 
     if grid_uuid is None:
@@ -61,7 +85,8 @@ def read(filename, grid_uuid=None):
     )
 
 
-def _read_grid(grid):
+def _read_grid(grid: Grid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
+    """Read a Grid object."""
     corner_points = grid.corner_points().reshape((grid.nk, grid.nj, grid.ni, 8, 3))
     point_map = {}
     cells = []
@@ -92,7 +117,8 @@ def _read_grid(grid):
     return points, cells
 
 
-def _read_hexagrid(grid):
+def _read_hexagrid(grid: HexaGrid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
+    """Read an HexaGrid object."""
     points = grid.points_ref()
     cells = np.empty((grid.cell_count, 8), dtype=int)
 
