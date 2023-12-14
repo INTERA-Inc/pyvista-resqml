@@ -10,7 +10,15 @@ import pathlib
 from resqpy.grid import any_grid, Grid
 from resqpy.model import Model
 from resqpy.property import Property
-from resqpy.unstructured import HexaGrid, TetraGrid, UnstructuredGrid
+from resqpy.unstructured import HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid
+
+
+_node_count_to_cell_type = {
+    (3, 3, 3, 3): "tetra",
+    (3, 3, 3, 3, 4): "pyramid",
+    (3, 3, 4, 4, 4): "wedge",
+    (4, 4, 4, 4, 4, 4): "hexahedron",
+}
 
 
 def read(
@@ -43,6 +51,7 @@ def read(
 
     try:
         grid = any_grid(model, uuid=grid_uuid)
+        grid.cache_all_geometry_arrays()
 
     except AssertionError:
         raise ValueError("no compatible grid found.")
@@ -50,11 +59,8 @@ def read(
     if isinstance(grid, Grid):
         points, cells = _read_grid(grid)
 
-    elif isinstance(grid, HexaGrid):
-        points, cells = _read_hexagrid(grid)
-
-    elif isinstance(grid, TetraGrid):
-        points, cells = _read_tetragrid(grid)
+    elif isinstance(grid, (HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid)):
+        points, cells = _read_unstructured_grid(grid)
 
     else:
         raise NotImplementedError()
@@ -65,6 +71,8 @@ def read(
 
     pc = grid.property_collection
     if pc.number_of_parts():
+        sizes = np.cumsum([len(c[1]) for c in cells])
+
         for uuid, title in zip(pc.uuids(), pc.titles()):
             prop = Property(model, uuid=uuid)
             data = prop.array_ref().ravel(order="C")
@@ -78,7 +86,7 @@ def read(
                 point_data[title] = data
             
             else:
-                cell_data[title] = [data]
+                cell_data[title] = np.split(data, sizes[:-1])
 
     return meshio.Mesh(
         points=points,
@@ -120,46 +128,141 @@ def _read_grid(grid: Grid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
     return points, cells
 
 
-def _read_hexagrid(grid: HexaGrid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
-    """Read an HexaGrid object."""
+def _read_unstructured_grid(
+    grid: Union[HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid]
+) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
+    """Read an UnstructuredGrid object."""
     points = grid.points_ref()
-    cells = np.empty((grid.cell_count, 8), dtype=int)
 
-    nodes_per_face = grid.nodes_per_face.reshape((grid.face_count, 4), order="C")
-    faces = grid.faces_per_cell.reshape((grid.cell_count, 6), order="C")
+    nodes_per_face_cl = np.insert(grid.nodes_per_face_cl, 0, 0)
+    nodes_per_face = [
+        grid.nodes_per_face[ibeg:iend]
+        for ibeg, iend in zip(nodes_per_face_cl[:-1], nodes_per_face_cl[1:])
+    ]
 
-    for i, cell in enumerate(faces):
-        cell = nodes_per_face[cell]
-        face1 = cell[0]
-        face2 = []
+    faces_per_cell_cl = np.insert(grid.faces_per_cell_cl, 0, 0)
+    faces_per_cell = [
+        grid.faces_per_cell[ibeg:iend]
+        for ibeg, iend in zip(faces_per_cell_cl[:-1], faces_per_cell_cl[1:])    
+    ]
 
-        for edge in (face1[:2], face1[2:]):
-            for face in cell[1:]:
-                idx = np.intersect1d(face, edge, assume_unique=True)
+    cells_ = []
+    cell_types = []
+    for cell in faces_per_cell:
+        nodes_per_cell = [nodes_per_face[face_cell] for face_cell in cell]
+        node_count = tuple(sorted(nodes.size for nodes in nodes_per_cell))
 
-                if idx.size == 2:
-                    hankel = np.column_stack((face, np.append(face[1:], face[0])))
-                    face = face[::-1] if (hankel == edge).all(axis=1).any() else face
-                    face2 += [i for i in face if i not in edge]
+        try:
+            cell_types.append(_node_count_to_cell_type[node_count])
 
-                    break
+        except KeyError:
+            cell_types.append("polyhedron")
 
-        if len(face2) != 4:
-            raise ValueError(f"failed to identify opposing faces for cell {i}")
+        cells_.append(nodes_per_cell)
 
-        cells[i] = np.concatenate((face1, face2))
+    cells = []
+    for cell_type, cell in zip(cell_types, cells_):
+        if cell_type == "tetra":
+            cell = to_tetra(cell)
 
-    cells = [("hexahedron", cells)]
+        elif cell_type == "pyramid":
+            cell = to_pyramid(cell)
+
+        elif cell_type == "wedge":
+            cell = to_wedge(cell)
+
+        elif cell_type == "hexahedron":
+            cell = to_hexahedron(cell)
+
+        if len(cells) == 0 or cells[-1][0] != cell_type:
+            cells.append((cell_type, [cell]))
+
+        else:
+            cells[-1][1].append(cell)
 
     return points, cells
 
 
-def _read_tetragrid(grid: TetraGrid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
-    """Read a TetraGrid object."""
-    points = grid.points_ref()
-    nodes_per_face = grid.nodes_per_face.reshape((grid.face_count, 3), order="C")
-    faces = grid.faces_per_cell.reshape((grid.cell_count, 4), order="C")
-    cells = np.row_stack([np.unique(cell) for cell in nodes_per_face[faces]])
-    cells = [("tetra", cells)]
+def to_tetra(cell: ArrayLike) -> list[int]:
+    """Convert a face-based tetra to a node-based tetra."""
+    base = cell[0].tolist()
+    apex = list(set(cell[1]).difference(base))
 
-    return points, cells
+    if len(apex) != 1:
+        raise ValueError("failed to find apex for tetra")
+    
+    return base + apex
+
+
+def to_pyramid(cell: ArrayLike) -> list[int]:
+    """Convert a face-based pyramid to a node-based pyramid."""
+    apex = None
+
+    for c in cell:
+        if len(c) == 4:
+            base = c.tolist()
+            break
+    
+    for c in cell:
+        diff = set(c).difference(base)
+
+        if len(diff) == 1:
+            apex = list(diff)
+            break
+
+    if apex is None:
+        raise ValueError("failed to find apex for pyramid")
+    
+    return base + apex
+
+
+def to_wedge(cell: ArrayLike) -> list[int]:
+    """Convert a face-based wedge to a node-based wedge."""
+    face1, face_ = [c.tolist() for c in cell if len(c) == 3]
+    face2 = []
+
+    edge = face1[:2]
+    edge_set = set(edge)
+
+    for face in cell:
+        if len(face) == 3:
+            continue
+
+        if len(edge_set.intersection(face)) == 2:
+            hankel = np.column_stack((face, np.append(face[1:], face[0])))
+            face = face[::-1] if (hankel == edge).all(axis=1).any() else face
+            face2 += [i for i in face if i not in edge]
+
+            break
+
+    for i in face_:
+        if i not in face2:
+            face2.append(i)
+            break
+
+    if len(face2) != 3:
+        raise ValueError("failed to identify opposing faces for wedge")
+
+    return face1 + face2
+
+
+def to_hexahedron(cell: ArrayLike) -> list[int]:
+    """Convert a face-based hexahedron to a node-based hexahedron."""
+    face1 = cell[0].tolist()
+    face2 = []
+
+    for edge in (face1[:2], face1[2:]):
+        edge_set = set(edge)
+
+        for face in cell[1:]:
+            if len(edge_set.intersection(face)) == 2:
+                hankel = np.column_stack((face, np.append(face[1:], face[0])))
+                face = face[::-1] if (hankel == edge).all(axis=1).any() else face
+                face2 += [i for i in face if i not in edge]
+
+                break
+
+    if len(face2) != 4:
+        raise ValueError("failed to identify opposing faces for hexahedron")
+
+    return face1 + face2
