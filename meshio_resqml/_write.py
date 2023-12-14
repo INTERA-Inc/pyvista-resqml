@@ -9,7 +9,7 @@ import pathlib
 from resqpy.crs import Crs
 from resqpy.model import new_model
 from resqpy.property import GridPropertyCollection
-from resqpy.unstructured import UnstructuredGrid, HexaGrid, TetraGrid
+from resqpy.unstructured import UnstructuredGrid
 
 
 meshio_type_to_faces = {
@@ -80,7 +80,9 @@ def write(
 
     face_map = {}
     nodes_per_face = []
+    nodes_per_face_cl = [0]
     faces_per_cell = []
+    faces_per_cell_cl = [0]
 
     count = 0
     for cell in faces:
@@ -94,10 +96,13 @@ def write(
                 except KeyError:
                     face_map[face_] = count
                     nodes_per_face.append(face)
+                    nodes_per_face_cl.append(nodes_per_face_cl[-1] + len(face))
                     idx = count
                     count += 1
 
                 faces_per_cell.append(idx)
+        
+        faces_per_cell_cl.append(faces_per_cell_cl[-1] + sum(len(face_cell) for face_cell in cell))
 
     # Initialize model
     model = new_model(filename)
@@ -105,28 +110,30 @@ def write(
     # Generate unstructured grid
     n_cells = sum(len(c) for c in cells)
     cell_types = [c.type for c in cells]
-
+    
     if len(cell_types) == 1:
-        if cell_types[0] == "tetra":
-            grid = TetraGrid(model, find_properties=False)
-            face_count_per_cell = 4
-            node_count_per_face = 3
-
-        elif cell_types[0] == "hexahedron":
-            grid = HexaGrid(model, find_properties=False)
-            face_count_per_cell = 6
-            node_count_per_face = 4
-
-        grid.set_cell_count(n_cells)
-        grid.face_count = len(face_map)
-        grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)
-        grid.faces_per_cell_cl = np.arange(1, grid.cell_count + 1, dtype=int) * face_count_per_cell
-        grid.faces_per_cell = np.array(faces_per_cell, dtype=int)
-        grid.nodes_per_face_cl = np.arange(1, grid.face_count + 1, dtype=int) * node_count_per_face
+        cell_shape = (
+            "tetrahedral"
+            if cell_types[0] == "tetra"
+            else "pyramidal"
+            if cell_types[0] == "pyramid"
+            else "prism"
+            if cell_types[0] == "wedge"
+            else "hexahedral"
+            if cell_types[0] == "hexahedron"
+            else "polyhedral"
+        )
 
     else:
-        grid = UnstructuredGrid(model, find_properties=False, geometry_required=False)
-        raise NotImplementedError()
+        cell_shape = "polyhedral"
+
+    grid = UnstructuredGrid(model, find_properties=False, geometry_required=False, cell_shape=cell_shape)
+    grid.set_cell_count(n_cells)
+    grid.face_count = len(face_map)
+    grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)
+    grid.nodes_per_face_cl = np.array(nodes_per_face_cl[1:], dtype=int)
+    grid.faces_per_cell = np.array(faces_per_cell, dtype=int)
+    grid.faces_per_cell_cl = np.array(faces_per_cell_cl[1:], dtype=int)
 
     # Set point array
     grid.points_cached = np.array(mesh.points)
