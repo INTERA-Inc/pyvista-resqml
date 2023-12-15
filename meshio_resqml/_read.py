@@ -81,11 +81,12 @@ def read(
                 if prop.is_continuous()
                 else data.astype(int)
             )
+            indexable_element = prop.indexable_element()
 
-            if prop.is_points():
+            if indexable_element == "nodes":
                 point_data[title] = data
             
-            else:
+            elif indexable_element == "cells":
                 cell_data[title] = np.split(data, sizes[:-1])
 
     return meshio.Mesh(

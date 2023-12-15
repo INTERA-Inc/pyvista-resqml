@@ -185,7 +185,7 @@ def write(
                 v,
                 source_info="meshio-resqml",
                 keyword=k,
-                indexable_element="points",
+                indexable_element="nodes",
                 discrete=v[0].dtype.kind in {"i", "u"},
                 uom=uom[k] if k in uom else None,
             )
