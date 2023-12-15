@@ -13,7 +13,7 @@ from resqpy.property import Property
 from resqpy.unstructured import HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid
 
 
-_node_count_to_cell_type = {
+node_count_to_cell_type = {
     (3, 3, 3, 3): "tetra",
     (3, 3, 3, 3, 4): "pyramid",
     (3, 3, 4, 4, 4): "wedge",
@@ -148,21 +148,26 @@ def _read_unstructured_grid(
 
     cells_ = []
     cell_types = []
+    polyhedral = False
     for cell in faces_per_cell:
-        nodes_per_cell = [nodes_per_face[face_cell] for face_cell in cell]
-        node_count = tuple(sorted(nodes.size for nodes in nodes_per_cell))
+        nodes_per_cell = [list(nodes_per_face[face_cell]) for face_cell in cell]
+        node_count = tuple(sorted(len(nodes) for nodes in nodes_per_cell))
 
         try:
-            cell_types.append(_node_count_to_cell_type[node_count])
+            cell_types.append(node_count_to_cell_type[node_count])
 
         except KeyError:
+            polyhedral = True
             cell_types.append("polyhedron")
 
         cells_.append(nodes_per_cell)
 
     cells = []
     for cell_type, cell in zip(cell_types, cells_):
-        if cell_type == "tetra":
+        if polyhedral:
+            cell_type = f"polyhedron{len(cell)}"
+
+        elif cell_type == "tetra":
             cell = to_tetra(cell)
 
         elif cell_type == "pyramid":
@@ -185,7 +190,7 @@ def _read_unstructured_grid(
 
 def to_tetra(cell: ArrayLike) -> list[int]:
     """Convert a face-based tetra to a node-based tetra."""
-    base = cell[0].tolist()
+    base = cell[0]
     apex = list(set(cell[1]).difference(base))
 
     if len(apex) != 1:
@@ -200,7 +205,7 @@ def to_pyramid(cell: ArrayLike) -> list[int]:
 
     for c in cell:
         if len(c) == 4:
-            base = c.tolist()
+            base = c
             break
     
     for c in cell:
@@ -218,7 +223,7 @@ def to_pyramid(cell: ArrayLike) -> list[int]:
 
 def to_wedge(cell: ArrayLike) -> list[int]:
     """Convert a face-based wedge to a node-based wedge."""
-    face1, face_ = [c.tolist() for c in cell if len(c) == 3]
+    face1, face_ = [c for c in cell if len(c) == 3]
     face2 = []
 
     edge = face1[:2]
@@ -248,7 +253,7 @@ def to_wedge(cell: ArrayLike) -> list[int]:
 
 def to_hexahedron(cell: ArrayLike) -> list[int]:
     """Convert a face-based hexahedron to a node-based hexahedron."""
-    face1 = cell[0].tolist()
+    face1 = cell[0]
     face2 = []
 
     for edge in (face1[:2], face1[2:]):
