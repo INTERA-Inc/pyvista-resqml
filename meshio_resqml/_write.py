@@ -109,6 +109,10 @@ def write(
         
         faces_per_cell_cl.append(faces_per_cell_cl[-1] + len(cell))
 
+    # Initialize path
+    path = pathlib.Path(filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
     # Initialize model
     model = new_model(filename)
 
@@ -201,12 +205,14 @@ def write(
     grid.crs_uuid = crs.uuid
 
     # Write files
+    h5_filename = f"{path.stem}.h5"
+    
     crs.create_xml()
-    grid.write_hdf5(write_active=True)
+    grid.write_hdf5(h5_filename, write_active=True)
     grid.create_xml(write_active=True)
     
     if pc is not None:
-        pc.write_hdf5_for_imported_list()
+        pc.write_hdf5_for_imported_list(h5_filename)
         pc.create_xml_for_imported_list_and_add_parts_to_model()
 
     model.store_epc()
