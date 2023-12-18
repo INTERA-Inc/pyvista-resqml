@@ -28,6 +28,7 @@ def tag(c):
 @task
 def clean(c, bytecode=False):
     patterns = [
+        ".pytest_cache",
         "build",
         "dist",
         "meshio_resqml.egg-info",
