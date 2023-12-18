@@ -41,7 +41,7 @@ def read(
         Output mesh.
 
     """
-    model = Model(filename)
+    model = Model(str(filename))
 
     if grid_uuid is None:
         for uuid, part in zip(model.uuids(), model.parts()):

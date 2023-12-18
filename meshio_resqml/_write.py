@@ -114,7 +114,7 @@ def write(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     # Initialize model
-    model = new_model(filename)
+    model = new_model(str(filename))
 
     # Generate unstructured grid
     n_cells = sum(len(c) for c in cells)
