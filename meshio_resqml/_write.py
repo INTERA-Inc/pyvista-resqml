@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Union
+from typing import Union
 from numpy.typing import ArrayLike
 
 import meshio
@@ -42,7 +42,6 @@ meshio_type_to_faces = {
 def write(
     filename: Union[str, pathlib.Path],
     mesh: meshio.Mesh,
-    uom: Optional[dict] = None,
 ) -> None:
     """
     Write RESQML EPC and H5 files.
@@ -53,12 +52,8 @@ def write(
         Output file name.
     mesh : :class:`meshio.Mesh`
         Mesh to export.
-    uom : dict or None, optional, default None
-        Unit of measures for each data arrays.
 
     """
-    uom = uom if uom else {}
-
     # Filter out 1D and 2D cells
     idx = [
         i for i, cell in enumerate(mesh.cells)
@@ -187,7 +182,7 @@ def write(
                 keyword=k,
                 indexable_element="nodes",
                 discrete=v[0].dtype.kind in {"i", "u"},
-                uom=uom[k] if k in uom else None,
+                uom=get_property_uom(mesh, k),
             )
 
         for k, v in cell_data.items():
@@ -197,7 +192,7 @@ def write(
                 keyword=k,
                 indexable_element="cells",
                 discrete=v[0][0].dtype.kind in {"i", "u"},
-                uom=uom[k] if k in uom else None,
+                uom=get_property_uom(mesh, k),
             )
 
     # Add a coordinate system
@@ -232,3 +227,12 @@ def slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
     c2 = b[:, 0] * c[:, 1] - b[:, 1] * c[:, 0]
 
     return a[:, 0] * c0 + a[:, 1] * c1 + a[:, 2] * c2
+
+
+def get_property_uom(mesh, key):
+    """Get property's unit of measure, if any."""
+    try:
+        return mesh.info["resqml:property"][key]["uom"]
+
+    except (KeyError, TypeError):
+        return None

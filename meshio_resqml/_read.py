@@ -72,6 +72,7 @@ def read(
     pc = grid.property_collection
     if pc.number_of_parts():
         sizes = np.cumsum([len(c[1]) for c in cells])
+        info = {"resqml:property": {}}
 
         for uuid, title in zip(pc.uuids(), pc.titles()):
             prop = Property(model, uuid=uuid)
@@ -89,11 +90,14 @@ def read(
             elif indexable_element == "cells":
                 cell_data[title] = np.split(data, sizes[:-1])
 
+            info["resqml:property"][title] = {"uom": prop.uom()}
+
     return meshio.Mesh(
         points=points,
         cells=cells,
         point_data=point_data,
         cell_data=cell_data,
+        info=info,
     )
 
 
