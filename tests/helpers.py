@@ -3,7 +3,6 @@ import copy
 import meshio
 import numpy as np
 
-
 tetra_mesh = meshio.Mesh(
     points=np.array(
         [
@@ -70,7 +69,9 @@ hexahedron_mesh = meshio.Mesh(
             [0.0, 1.0, 2.0],
         ]
     ),
-    cells=[("hexahedron", np.array([[0, 1, 2, 3, 4, 5, 6, 7], [4, 5, 6, 7, 8, 9, 10, 11]]))],
+    cells=[
+        ("hexahedron", np.array([[0, 1, 2, 3, 4, 5, 6, 7], [4, 5, 6, 7, 8, 9, 10, 11]]))
+    ],
     point_data={"a": np.random.rand(12), "b": np.random.randint(100, size=12)},
     cell_data={"c": [np.arange(2)], "d": [np.random.rand(2)]},
 )
@@ -102,7 +103,10 @@ hybrid_mesh = meshio.Mesh(
         ("wedge", np.array([[1, 11, 5, 2, 12, 6], [13, 0, 4, 14, 3, 7]])),
     ],
     point_data={"a": np.random.rand(15), "b": np.random.randint(100, size=15)},
-    cell_data={"c": np.split(np.arange(6), [1, 2, 4]), "d": np.split(np.random.rand(6), [1, 2, 4])},
+    cell_data={
+        "c": np.split(np.arange(6), [1, 2, 4]),
+        "d": np.split(np.random.rand(6), [1, 2, 4]),
+    },
 )
 
 poly_hybrid_mesh = meshio.Mesh(
@@ -137,7 +141,7 @@ poly_hybrid_mesh = meshio.Mesh(
                     [2, 3, 7, 6],
                     [0, 4, 7, 3],
                 ],
-            ]
+            ],
         ),
         (
             "polyhedron5",
@@ -149,7 +153,7 @@ poly_hybrid_mesh = meshio.Mesh(
                     [6, 7, 8],
                     [7, 4, 8],
                 ],
-            ]
+            ],
         ),
         (
             "polyhedron4",
@@ -166,17 +170,17 @@ poly_hybrid_mesh = meshio.Mesh(
                     [5, 6, 10],
                     [5, 6, 8],
                 ],
-            ]
+            ],
         ),
         (
             "polyhedron5",
             [
                 [
-                    [1, 5,11],
+                    [1, 5, 11],
                     [2, 12, 6],
                     [1, 11, 12, 2],
                     [11, 5, 6, 12],
-                    [1, 2, 6, 5],                
+                    [1, 2, 6, 5],
                 ],
                 [
                     [13, 4, 0],
@@ -185,11 +189,14 @@ poly_hybrid_mesh = meshio.Mesh(
                     [0, 4, 7, 3],
                     [13, 14, 7, 4],
                 ],
-            ]
-        )
+            ],
+        ),
     ],
     point_data={"a": np.random.rand(15), "b": np.random.randint(100, size=15)},
-    cell_data={"c": np.split(np.arange(6), [1, 2, 4]), "d": np.split(np.random.rand(6), [1, 2, 4])},
+    cell_data={
+        "c": np.split(np.arange(6), [1, 2, 4]),
+        "d": np.split(np.random.rand(6), [1, 2, 4]),
+    },
 )
 
 dodecahedron_mesh = meshio.Mesh(
@@ -235,12 +242,13 @@ dodecahedron_mesh = meshio.Mesh(
                     [10, 17, 3, 14, 11],
                     [11, 18, 1, 12, 10],
                 ],
-            ]
+            ],
         ),
     ],
     point_data={"a": np.random.rand(20), "b": np.random.randint(100, size=20)},
     cell_data={"c": [np.arange(1)], "d": [np.random.randint(100, size=1)]},
 )
+
 
 def write_read(tmp_path, writer, reader, input_mesh, atol):
     in_mesh = copy.deepcopy(input_mesh)

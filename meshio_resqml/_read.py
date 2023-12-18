@@ -1,18 +1,23 @@
 from __future__ import annotations
-from typing import Optional, Union
-from numpy.typing import ArrayLike
 
 import itertools
+import pathlib
+from typing import Optional, Union
+
 import meshio
 import numpy as np
-import pathlib
-
+from numpy.typing import ArrayLike
 from resqpy.crs import Crs
-from resqpy.grid import any_grid, Grid
+from resqpy.grid import Grid, any_grid
 from resqpy.model import Model
 from resqpy.property import Property
-from resqpy.unstructured import HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid
-
+from resqpy.unstructured import (
+    HexaGrid,
+    PrismGrid,
+    PyramidGrid,
+    TetraGrid,
+    UnstructuredGrid,
+)
 
 node_count_to_cell_type = {
     (3, 3, 3, 3): "tetra",
@@ -46,7 +51,10 @@ def read(
 
     if grid_uuid is None:
         for uuid, part in zip(model.uuids(), model.parts()):
-            if "IjkGridRepresentation" in part or "UnstructuredGridRepresentation" in part:
+            if (
+                "IjkGridRepresentation" in part
+                or "UnstructuredGridRepresentation" in part
+            ):
                 grid_uuid = uuid
                 break
 
@@ -55,12 +63,14 @@ def read(
         grid.cache_all_geometry_arrays()
 
     except AssertionError:
-        raise ValueError("no compatible grid found.")
+        raise ValueError("no compatible grid found")
 
     if isinstance(grid, Grid):
         points, cells = _read_grid(grid)
 
-    elif isinstance(grid, (HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid)):
+    elif isinstance(
+        grid, (HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid)
+    ):
         points, cells = _read_unstructured_grid(grid)
 
     else:
@@ -103,16 +113,12 @@ def read(
         for uuid, title in zip(pc.uuids(), pc.titles()):
             prop = Property(model, uuid=uuid)
             data = prop.array_ref().ravel(order="C")
-            data = (
-                data.astype(float)
-                if prop.is_continuous()
-                else data.astype(int)
-            )
+            data = data.astype(float) if prop.is_continuous() else data.astype(int)
             indexable_element = prop.indexable_element()
 
             if indexable_element == "nodes":
                 point_data[title] = data
-            
+
             elif indexable_element == "cells":
                 cell_data[title] = np.split(data, sizes[:-1])
 
@@ -129,6 +135,9 @@ def read(
 
 def _read_grid(grid: Grid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
     """Read a Grid object."""
+    if not grid.geometry_defined_for_all_cells():
+        raise ValueError("unable to process grid with undefined cells")
+
     corner_points = grid.corner_points().reshape((grid.nk, grid.nj, grid.ni, 8, 3))
     point_map = {}
     cells = []
@@ -174,7 +183,7 @@ def _read_unstructured_grid(
     faces_per_cell_cl = np.insert(grid.faces_per_cell_cl, 0, 0)
     faces_per_cell = [
         grid.faces_per_cell[ibeg:iend]
-        for ibeg, iend in zip(faces_per_cell_cl[:-1], faces_per_cell_cl[1:])    
+        for ibeg, iend in zip(faces_per_cell_cl[:-1], faces_per_cell_cl[1:])
     ]
 
     cells_ = []
@@ -226,7 +235,7 @@ def to_tetra(cell: ArrayLike) -> list[int]:
 
     if len(apex) != 1:
         raise ValueError("failed to find apex for tetra")
-    
+
     return base + apex
 
 
@@ -238,7 +247,7 @@ def to_pyramid(cell: ArrayLike) -> list[int]:
         if len(c) == 4:
             base = c
             break
-    
+
     for c in cell:
         diff = set(c).difference(base)
 
@@ -248,7 +257,7 @@ def to_pyramid(cell: ArrayLike) -> list[int]:
 
     if apex is None:
         raise ValueError("failed to find apex for pyramid")
-    
+
     return base + apex
 
 

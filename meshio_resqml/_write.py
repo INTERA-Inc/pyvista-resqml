@@ -1,16 +1,15 @@
 from __future__ import annotations
+
+import pathlib
 from typing import Union
-from numpy.typing import ArrayLike
 
 import meshio
 import numpy as np
-import pathlib
-
+from numpy.typing import ArrayLike
 from resqpy.crs import Crs
 from resqpy.model import new_model
 from resqpy.property import GridPropertyCollection
 from resqpy.unstructured import UnstructuredGrid
-
 
 meshio_type_to_faces = {
     "tetra": {
@@ -56,7 +55,8 @@ def write(
     """
     # Filter out 1D and 2D cells
     idx = [
-        i for i, cell in enumerate(mesh.cells)
+        i
+        for i, cell in enumerate(mesh.cells)
         if cell.type in {"tetra", "pyramid", "wedge", "hexahedron"}
         or cell.type.startswith("polyhedron")
     ]
@@ -101,7 +101,7 @@ def write(
                 count += 1
 
             faces_per_cell.append(idx)
-        
+
         faces_per_cell_cl.append(faces_per_cell_cl[-1] + len(cell))
 
     # Initialize path
@@ -113,7 +113,7 @@ def write(
 
     # Generate unstructured grid
     n_cells = sum(len(c) for c in cells)
-    
+
     if len(cell_types) == 1:
         cell_shape = (
             "tetrahedral"
@@ -130,7 +130,9 @@ def write(
     else:
         cell_shape = "polyhedral"
 
-    grid = UnstructuredGrid(model, find_properties=False, geometry_required=False, cell_shape=cell_shape)
+    grid = UnstructuredGrid(
+        model, find_properties=False, geometry_required=False, cell_shape=cell_shape
+    )
     grid.set_cell_count(n_cells)
     grid.face_count = len(face_map)
     grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)
@@ -146,10 +148,17 @@ def write(
     # The calculation is based on the sign of the scalar product of the face normal vector
     # and a vector defined by the cell center and any point on the face
     if polyhedral:
-        cell_centers = np.array([mesh.points[np.unique(np.concatenate(cell))].mean(axis=0) for cell in cell_faces])
+        cell_centers = np.array(
+            [
+                mesh.points[np.unique(np.concatenate(cell))].mean(axis=0)
+                for cell in cell_faces
+            ]
+        )
 
     else:
-        cell_centers = np.concatenate([mesh.points[cell.data].mean(axis=1) for cell in cells])
+        cell_centers = np.concatenate(
+            [mesh.points[cell.data].mean(axis=1) for cell in cells]
+        )
 
     face_to_cell_idx = np.searchsorted(
         grid.faces_per_cell_cl - 1,
@@ -159,9 +168,11 @@ def write(
 
     face_first_node = np.insert(grid.nodes_per_face_cl[:-1], 0, 0)
     face_three_first_idx = (face_first_node[:, None] + np.arange(3)).ravel()
-    face_three_first_nodes = grid.nodes_per_face[face_three_first_idx].reshape((grid.face_count, 3))
+    face_three_first_nodes = grid.nodes_per_face[face_three_first_idx].reshape(
+        (grid.face_count, 3)
+    )
     tri_face_points = mesh.points[face_three_first_nodes[grid.faces_per_cell]]
-    
+
     det = slicing_summing(
         tri_face_points[:, 2] - tri_face_points[:, 1],
         tri_face_points[:, 0] - tri_face_points[:, 1],
@@ -205,11 +216,11 @@ def write(
 
     # Write files
     h5_filename = f"{path.stem}.h5"
-    
+
     crs.create_xml()
     grid.write_hdf5(h5_filename, write_active=True)
     grid.create_xml(write_active=True)
-    
+
     if pc is not None:
         pc.write_hdf5_for_imported_list(h5_filename)
         pc.create_xml_for_imported_list_and_add_parts_to_model()
@@ -224,7 +235,7 @@ def slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
     Note
     ----
     See <https://stackoverflow.com/a/42386330/353337>.
-    
+
     """
     c0 = b[:, 1] * c[:, 2] - b[:, 2] * c[:, 1]
     c1 = b[:, 2] * c[:, 0] - b[:, 0] * c[:, 2]
@@ -233,7 +244,7 @@ def slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
     return a[:, 0] * c0 + a[:, 1] * c1 + a[:, 2] * c2
 
 
-def get_property_uom(mesh, key):
+def get_property_uom(mesh: meshio.Mesh, key: str) -> str:
     """Get property's unit of measure, if any."""
     try:
         return mesh.info["resqml:property"][key]["uom"]
