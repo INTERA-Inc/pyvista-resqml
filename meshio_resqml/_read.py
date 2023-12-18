@@ -7,6 +7,7 @@ import meshio
 import numpy as np
 import pathlib
 
+from resqpy.crs import Crs
 from resqpy.grid import any_grid, Grid
 from resqpy.model import Model
 from resqpy.property import Property
@@ -65,6 +66,31 @@ def read(
     else:
         raise NotImplementedError()
 
+    # Read coordinate system data
+    crs = Crs(model, uuid=grid.crs_uuid)
+    info = {
+        "resqml:crs": {
+            key: getattr(crs, key)
+            for key in [
+                "x_offset",
+                "y_offset",
+                "z_offset",
+                "rotation",
+                "rotation_units",
+                "xy_units",
+                "z_units",
+                "z_inc_down",
+                "axis_order",
+                "axis_order",
+                "time_units",
+                "epsg_code",
+                "title",
+                "originator",
+                "extra_metadata",
+            ]
+        }
+    }
+
     # Read data arrays
     point_data = {}
     cell_data = {}
@@ -72,7 +98,7 @@ def read(
     pc = grid.property_collection
     if pc.number_of_parts():
         sizes = np.cumsum([len(c[1]) for c in cells])
-        info = {"resqml:property": {}}
+        info["resqml:property"] = {}
 
         for uuid, title in zip(pc.uuids(), pc.titles()):
             prop = Property(model, uuid=uuid)

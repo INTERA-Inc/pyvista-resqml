@@ -196,7 +196,11 @@ def write(
             )
 
     # Add a coordinate system
-    crs = Crs(model, z_inc_down=False)
+    crs = (
+        Crs(model, **mesh.info["resqml:crs"])
+        if isinstance(mesh.info, dict) and "resqml:crs" in mesh.info
+        else Crs(model, z_inc_down=False)
+    )
     grid.crs_uuid = crs.uuid
 
     # Write files
