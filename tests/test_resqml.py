@@ -15,7 +15,7 @@ import meshio_resqml
         helpers.hexahedron_mesh,
         helpers.hybrid_mesh,
         helpers.poly_hybrid_mesh,
-        helpers.dodecahedron_mesh,
+        helpers.polyhedron_mesh,
         "block.epc",
         "s_bend.epc",
     ],

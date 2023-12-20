@@ -205,7 +205,7 @@ def _read_unstructured_grid(
     cells = []
     for cell_type, cell in zip(cell_types, cells_):
         if polyhedral:
-            cell_type = f"polyhedron{len(cell)}"
+            cell_type = f"polyhedron{len(set(np.concatenate(cell).tolist()))}"
 
         elif cell_type == "tetra":
             cell = to_tetra(cell)
