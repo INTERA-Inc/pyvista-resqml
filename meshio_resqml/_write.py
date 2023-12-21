@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Union
+from typing import Optional, Union
 
 import meshio
 import numpy as np
@@ -41,6 +41,7 @@ meshio_type_to_faces = {
 def write(
     filename: Union[str, pathlib.Path],
     mesh: meshio.Mesh,
+    uom: Optional[dict] = None,
 ) -> None:
     """
     Write RESQML EPC and H5 files.
@@ -51,8 +52,12 @@ def write(
         Output file name.
     mesh : :class:`meshio.Mesh`
         Mesh to export.
+    uom : dict or None, optional, default None
+        Unit of measure for data arrays. Supercede unit of measures defined in key 'resqml:property' of :attr:`meshio.Mesh.info`.
 
     """
+    uom = uom if uom else {}
+
     # Filter out 1D and 2D cells
     idx = [
         i
@@ -193,7 +198,7 @@ def write(
                 keyword=k,
                 indexable_element="nodes",
                 discrete=v[0].dtype.kind in {"i", "u"},
-                uom=get_property_uom(mesh, k),
+                uom=uom[k] if k in uom else get_property_uom(mesh, k),
             )
 
         for k, v in cell_data.items():
@@ -203,7 +208,7 @@ def write(
                 keyword=k,
                 indexable_element="cells",
                 discrete=v[0][0].dtype.kind in {"i", "u"},
-                uom=get_property_uom(mesh, k),
+                uom=uom[k] if k in uom else get_property_uom(mesh, k),
             )
 
     # Add a coordinate system
