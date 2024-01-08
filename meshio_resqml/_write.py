@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Optional, Union
+from typing import Optional
 
 import meshio
 import numpy as np
@@ -39,7 +39,7 @@ meshio_type_to_faces = {
 
 
 def write(
-    filename: Union[str, pathlib.Path],
+    filename: str | pathlib.Path,
     mesh: meshio.Mesh,
     uom: Optional[dict] = None,
 ) -> None:

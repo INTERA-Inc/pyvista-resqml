@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 import pathlib
-from typing import Optional, Union
+from typing import Optional
 
 import meshio
 import numpy as np
@@ -28,7 +28,7 @@ node_count_to_cell_type = {
 
 
 def read(
-    filename: Union[str, pathlib.Path],
+    filename: str | pathlib.Path,
     grid_uuid: Optional[str] = None,
 ) -> meshio.Mesh:
     """
@@ -169,7 +169,7 @@ def _read_grid(grid: Grid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
 
 
 def _read_unstructured_grid(
-    grid: Union[HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid]
+    grid: HexaGrid | PrismGrid | PyramidGrid | TetraGrid | UnstructuredGrid
 ) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
     """Read an UnstructuredGrid object."""
     points = grid.points_ref()
