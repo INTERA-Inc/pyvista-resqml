@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import itertools
-import pathlib
+import os
 from typing import Optional
 
-import meshio
 import numpy as np
 from numpy.typing import ArrayLike
+import pyvista as pv
 from resqpy.crs import Crs
 from resqpy.grid import Grid, any_grid
 from resqpy.model import Model
@@ -19,31 +19,24 @@ from resqpy.unstructured import (
     UnstructuredGrid,
 )
 
-node_count_to_cell_type = {
-    (3, 3, 3, 3): "tetra",
-    (3, 3, 3, 3, 4): "pyramid",
-    (3, 3, 4, 4, 4): "wedge",
-    (4, 4, 4, 4, 4, 4): "hexahedron",
-}
-
 
 def read(
-    filename: str | pathlib.Path,
+    filename: str | os.PathLike,
     grid_uuid: Optional[str] = None,
-) -> meshio.Mesh:
+) -> pv.ExplicitStructuredGrid | pv.UnstructuredGrid:
     """
     Read RESQML EPC file.
 
     Parameters
     ----------
-    filename : str or :class:`pathlib.Path`
+    filename : str | PathLike
         Input file name.
-    grid_uuid : str or None, optional, default None
+    grid_uuid : str, optional
         UUID of the grid to be imported.
 
     Returns
     -------
-    :class:`meshio.Mesh`
+    :class:`pyvista.ExplicitStructuredGrid` | :class:`pyvista.UnstructuredGrid`
         Output mesh.
 
     """
@@ -63,114 +56,86 @@ def read(
         grid.cache_all_geometry_arrays()
 
     except AssertionError:
-        raise ValueError("no compatible grid found")
+        raise ValueError("could not find any compatible grid")
 
     if isinstance(grid, Grid):
-        points, cells = _read_grid(grid)
+        mesh = _read_grid(grid)
 
     elif isinstance(
         grid, (HexaGrid, PrismGrid, PyramidGrid, TetraGrid, UnstructuredGrid)
     ):
-        points, cells = _read_unstructured_grid(grid)
+        mesh = _read_unstructured_grid(grid)
 
     else:
         raise NotImplementedError()
 
     # Read coordinate system data
     crs = Crs(model, uuid=grid.crs_uuid)
-    info = {
-        "resqml:crs": {
-            key: getattr(crs, key)
-            for key in [
-                "x_offset",
-                "y_offset",
-                "z_offset",
-                "rotation",
-                "rotation_units",
-                "xy_units",
-                "z_units",
-                "z_inc_down",
-                "axis_order",
-                "axis_order",
-                "time_units",
-                "epsg_code",
-                "title",
-                "originator",
-                "extra_metadata",
-            ]
-        }
-    }
+    crs_dict = {}
+
+    for key in _crs_keys:
+        try:
+            crs_dict[key] = getattr(crs, key)
+
+        except AttributeError:
+            pass
+
+    mesh.user_dict["crs"] = crs_dict
 
     # Read data arrays
-    point_data = {}
-    cell_data = {}
-
     pc = grid.property_collection
+
     if pc.number_of_parts():
-        sizes = np.cumsum([len(c[1]) for c in cells])
-        info["resqml:property"] = {}
+        property_dict = {}
 
         for uuid, title in zip(pc.uuids(), pc.titles()):
             prop = Property(model, uuid=uuid)
-            data = prop.array_ref().ravel(order="C")
+            data = prop.array_ref().ravel()
             data = data.astype(float) if prop.is_continuous() else data.astype(int)
             indexable_element = prop.indexable_element()
 
             if indexable_element == "nodes":
-                point_data[title] = data
+                mesh.point_data[title] = data
 
             elif indexable_element == "cells":
-                cell_data[title] = np.split(data, sizes[:-1])
+                mesh.cell_data[title] = data
 
-            info["resqml:property"][title] = {"uom": prop.uom()}
+            property_dict[title] = {"uom": prop.uom()}
 
-    return meshio.Mesh(
-        points=points,
-        cells=cells,
-        point_data=point_data,
-        cell_data=cell_data,
-        info=info,
-    )
+        mesh.user_dict["property"] = property_dict
+
+    return mesh
 
 
-def _read_grid(grid: Grid) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
+def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid:
     """Read a Grid object."""
-    if not grid.geometry_defined_for_all_cells():
-        raise ValueError("unable to process grid with undefined cells")
+    corner_points = grid.corner_points()
 
-    corner_points = grid.corner_points().reshape((grid.nk, grid.nj, grid.ni, 8, 3))
-    point_map = {}
-    cells = []
-    count = 0
-    for k, j, i in itertools.product(range(grid.nk), range(grid.nj), range(grid.ni)):
-        cell = []
+    corners = np.empty((2 * grid.nk, 2 * grid.nj, 2 * grid.ni, 3))
+    corners[::2, ::2, ::2] = corner_points[:, :, :, ::2, ::2, ::2].squeeze()
+    corners[1::2, ::2, ::2] = corner_points[:, :, :, 1::2, ::2, ::2].squeeze()
+    corners[1::2, 1::2, ::2] = corner_points[:, :, :, 1::2, 1::2, ::2].squeeze()
+    corners[::2, 1::2, ::2] = corner_points[:, :, :, ::2, 1::2, ::2].squeeze()
+    corners[::2, ::2, 1::2] = corner_points[:, :, :, ::2, ::2, 1::2].squeeze()
+    corners[1::2, ::2, 1::2] = corner_points[:, :, :, 1::2, ::2, 1::2].squeeze()
+    corners[1::2, 1::2, 1::2] = corner_points[:, :, :, 1::2, 1::2, 1::2].squeeze()
+    corners[::2, 1::2, 1::2] = corner_points[:, :, :, ::2, 1::2, 1::2].squeeze()
 
-        for point in corner_points[k, j, i]:
-            point = tuple(point)
+    corners = corners.reshape((8 * grid.ni * grid.nj * grid.nk, 3))
+    mesh = pv.ExplicitStructuredGrid((grid.ni + 1, grid.nj + 1, grid.nk + 1), corners)
 
-            try:
-                idx = point_map[point]
+    # Inactive cells
+    inactive = grid.extract_inactive_mask().astype(bool)
 
-            except KeyError:
-                point_map[point] = count
-                idx = count
-                count += 1
+    if inactive.any():
+        mesh.hide_cells(inactive.ravel(), inplace=True)
 
-            cell.append(idx)
-
-        cells.append(cell)
-
-    points = np.array(list(point_map))
-    cells = np.array(cells, dtype=int)
-    cells[:, [6, 7, 2, 3]] = cells[:, [7, 6, 3, 2]]
-    cells = [("hexahedron", cells)]
-
-    return points, cells
+    return mesh
 
 
 def _read_unstructured_grid(
     grid: HexaGrid | PrismGrid | PyramidGrid | TetraGrid | UnstructuredGrid
-) -> tuple[ArrayLike, list[tuple[str, ArrayLike]]]:
+) -> pv.UnstructuredGrid:
     """Read an UnstructuredGrid object."""
     points = grid.points_ref()
 
@@ -187,59 +152,55 @@ def _read_unstructured_grid(
     ]
 
     cells_ = []
-    cell_types = []
-    polyhedral = False
+    celltypes = []
     for cell in faces_per_cell:
         nodes_per_cell = [list(nodes_per_face[face_cell]) for face_cell in cell]
-        node_count = tuple(sorted(len(nodes) for nodes in nodes_per_cell))
+        node_count = tuple(sorted(map(len, nodes_per_cell)))
 
         try:
-            cell_types.append(node_count_to_cell_type[node_count])
+            celltypes.append(_node_count_to_cell_type[node_count])
 
         except KeyError:
-            polyhedral = True
-            cell_types.append("polyhedron")
+            celltypes.append("POLYHEDRON")
 
         cells_.append(nodes_per_cell)
 
     cells = []
-    for cell_type, cell in zip(cell_types, cells_):
-        if polyhedral:
-            cell_type = f"polyhedron{len(set(np.concatenate(cell).tolist()))}"
-
-        elif cell_type == "tetra":
+    for celltype, cell in zip(celltypes, cells_):
+        if celltype == "TETRA":
             cell = to_tetra(cell)
 
-        elif cell_type == "pyramid":
+        elif celltype == "PYRAMID":
             cell = to_pyramid(cell)
 
-        elif cell_type == "wedge":
+        elif celltype == "WEDGE":
             cell = to_wedge(cell)
 
-        elif cell_type == "hexahedron":
+        elif celltype == "HEXAHEDRON":
             cell = to_hexahedron(cell)
 
-        if len(cells) == 0 or cells[-1][0] != cell_type:
-            cells.append((cell_type, [cell]))
-
         else:
-            cells[-1][1].append(cell)
+            raise NotImplementedError(f"cell type {celltype} is not supported")
 
-    return points, cells
+        cells += [len(cell), *cell]
+
+    celltypes = [_celltype_map[celltype] for celltype in celltypes]
+
+    return pv.UnstructuredGrid(cells, celltypes, points)
 
 
-def to_tetra(cell: ArrayLike) -> list[int]:
+def to_tetra(cell: ArrayLike) -> ArrayLike:
     """Convert a face-based tetra to a node-based tetra."""
     base = cell[0]
     apex = list(set(cell[1]).difference(base))
 
     if len(apex) != 1:
-        raise ValueError("failed to find apex for tetra")
+        raise ValueError("could not find apex for tetra")
 
     return base + apex
 
 
-def to_pyramid(cell: ArrayLike) -> list[int]:
+def to_pyramid(cell: ArrayLike) -> ArrayLike:
     """Convert a face-based pyramid to a node-based pyramid."""
     apex = None
 
@@ -256,12 +217,12 @@ def to_pyramid(cell: ArrayLike) -> list[int]:
             break
 
     if apex is None:
-        raise ValueError("failed to find apex for pyramid")
+        raise ValueError("could not find apex for pyramid")
 
     return base + apex
 
 
-def to_wedge(cell: ArrayLike) -> list[int]:
+def to_wedge(cell: ArrayLike) -> ArrayLike:
     """Convert a face-based wedge to a node-based wedge."""
     face1, face_ = [c for c in cell if len(c) == 3]
     face2 = []
@@ -286,12 +247,12 @@ def to_wedge(cell: ArrayLike) -> list[int]:
             break
 
     if len(face2) != 3:
-        raise ValueError("failed to identify opposing faces for wedge")
+        raise ValueError("could not identify opposing faces for wedge")
 
     return face1 + face2
 
 
-def to_hexahedron(cell: ArrayLike) -> list[int]:
+def to_hexahedron(cell: ArrayLike) -> ArrayLike:
     """Convert a face-based hexahedron to a node-based hexahedron."""
     face1 = cell[0]
     face2 = []
@@ -308,6 +269,34 @@ def to_hexahedron(cell: ArrayLike) -> list[int]:
                 break
 
     if len(face2) != 4:
-        raise ValueError("failed to identify opposing faces for hexahedron")
+        raise ValueError("could not identify opposing faces for hexahedron")
 
     return face1 + face2
+
+
+_node_count_to_cell_type = {
+    (3, 3, 3, 3): "TETRA",
+    (3, 3, 3, 3, 4): "PYRAMID",
+    (3, 3, 4, 4, 4): "WEDGE",
+    (4, 4, 4, 4, 4, 4): "HEXAHEDRON",
+}
+
+_celltype_map = {celltype.name: int(celltype) for celltype in pv.CellType}
+
+_crs_keys = (
+    "x_offset",
+    "y_offset",
+    "z_offset",
+    "rotation",
+    "rotation_units",
+    "xy_units",
+    "z_units",
+    "z_inc_down",
+    "axis_order",
+    "axis_order",
+    "time_units",
+    "epsg_code",
+    "title",
+    "originator",
+    "extra_metadata",
+)

@@ -1,46 +1,21 @@
 from __future__ import annotations
 
+import os
 import pathlib
 from typing import Optional
 
-import meshio
 import numpy as np
 from numpy.typing import ArrayLike
+import pyvista as pv
 from resqpy.crs import Crs
 from resqpy.model import new_model
 from resqpy.property import GridPropertyCollection
 from resqpy.unstructured import UnstructuredGrid
 
-meshio_type_to_faces = {
-    "tetra": {
-        "triangle": np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]]),
-    },
-    "pyramid": {
-        "quad": np.array([[0, 3, 2, 1]]),
-        "triangle": np.array([[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]),
-    },
-    "wedge": {
-        "triangle": np.array([[0, 2, 1], [3, 4, 5]]),
-        "quad": np.array([[0, 1, 4, 3], [1, 2, 5, 4], [0, 3, 5, 2]]),
-    },
-    "hexahedron": {
-        "quad": np.array(
-            [
-                [0, 3, 2, 1],
-                [4, 5, 6, 7],
-                [0, 1, 5, 4],
-                [1, 2, 6, 5],
-                [2, 3, 7, 6],
-                [0, 4, 7, 3],
-            ]
-        ),
-    },
-}
 
-
-def write(
-    filename: str | pathlib.Path,
-    mesh: meshio.Mesh,
+def save(
+    filename: str | os.PathLike,
+    mesh: pv.ExplicitStructuredGrid | pv.StructuredGrid | pv.UnstructuredGrid,
     uom: Optional[dict] = None,
 ) -> None:
     """
@@ -48,41 +23,46 @@ def write(
 
     Parameters
     ----------
-    filename : str or :class:`pathlib.Path`
+    filename : str | PathLike
         Output file name.
-    mesh : :class:`meshio.Mesh`
+    mesh : :class:`pyvista.ExplicitStructuredGrid` | :class:`pyvista.StructuredGrid` | :class:`pyvista.UnstructuredGrid`
         Mesh to export.
-    uom : dict or None, optional, default None
-        Unit of measure for data arrays. Supercede unit of measures defined in key 'resqml:property' of :attr:`meshio.Mesh.info`.
+    uom : dict, optional
+        Unit of measure for data arrays. Supercede unit of measures defined in key 'property' of :attr:`pyvista.DataSet.user_dict`.
 
     """
     uom = uom if uom else {}
 
-    # Filter out 1D and 2D cells
-    idx = [
-        i
-        for i, cell in enumerate(mesh.cells)
-        if cell.type in {"tetra", "pyramid", "wedge", "hexahedron"}
-        or cell.type.startswith("polyhedron")
-    ]
-    if not idx:
-        raise ValueError("no 3D cell found in input mesh")
+    if isinstance(mesh, (pv.ExplicitStructuredGrid, pv.StructuredGrid)):
+        mesh = mesh.cast_to_unstructured_grid()
 
-    cells = [mesh.cells[i] for i in idx]
-    cell_data = {k: [v[i] for i in idx] for k, v in mesh.cell_data.items()}
-    cell_types = [c.type for c in cells]
-    polyhedral = any(cell_type.startswith("polyhedron") for cell_type in cell_types)
+        for key in "IJK":
+            if f"BLOCK_{key}" in mesh.cell_data:
+                mesh.cell_data.pop(f"BLOCK_{key}", None)
 
     # Generate face data
-    if polyhedral:
-        cell_faces = [c for cell in cells for c in cell.data]
+    connectivity = mesh.cell_connectivity
+    offset = mesh.offset
+    celltypes = mesh.celltypes
 
+    if celltypes.min() == celltypes.max():
+        celltype = pv.CellType(celltypes[0])
+        cell_shape = _celltype_to_cell_shape[celltype.name]
+
+        if celltype.name == "POLYHEDRON":
+            raise NotImplementedError()
+
+        else:
+            n_vertices = _celltype_to_n_vertices[celltype.name]
+            cells = connectivity.reshape((connectivity.size // n_vertices, n_vertices))
+            cell_faces = [
+                [face for v in _celltype_to_faces[celltype.name].values() for face in cell[v]]
+                for cell in cells
+            ]
+        
     else:
-        cell_faces = [
-            [face for v in meshio_type_to_faces[cell.type].values() for face in c[v]]
-            for cell in cells
-            for c in cell.data
-        ]
+        cell_shape = "polyhedral"
+        raise NotImplementedError()
 
     face_map = {}
     nodes_per_face = []
@@ -117,28 +97,10 @@ def write(
     model = new_model(str(filename))
 
     # Generate unstructured grid
-    n_cells = sum(len(c) for c in cells)
-
-    if len(cell_types) == 1:
-        cell_shape = (
-            "tetrahedral"
-            if cell_types[0] == "tetra"
-            else "pyramidal"
-            if cell_types[0] == "pyramid"
-            else "prism"
-            if cell_types[0] == "wedge"
-            else "hexahedral"
-            if cell_types[0] == "hexahedron"
-            else "polyhedral"
-        )
-
-    else:
-        cell_shape = "polyhedral"
-
     grid = UnstructuredGrid(
         model, find_properties=False, geometry_required=False, cell_shape=cell_shape
     )
-    grid.set_cell_count(n_cells)
+    grid.set_cell_count(mesh.n_cells)
     grid.face_count = len(face_map)
     grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)
     grid.nodes_per_face_cl = np.array(nodes_per_face_cl[1:], dtype=int)
@@ -152,19 +114,6 @@ def write(
     # Determine right handedness of cell faces w.r.t. cell center
     # The calculation is based on the sign of the scalar product of the face normal vector
     # and a vector defined by the cell center and any point on the face
-    if polyhedral:
-        cell_centers = np.array(
-            [
-                mesh.points[np.unique(np.concatenate(cell))].mean(axis=0)
-                for cell in cell_faces
-            ]
-        )
-
-    else:
-        cell_centers = np.concatenate(
-            [mesh.points[cell.data].mean(axis=1) for cell in cells]
-        )
-
     face_to_cell_idx = np.searchsorted(
         grid.faces_per_cell_cl - 1,
         np.arange(grid.faces_per_cell.size),
@@ -178,7 +127,8 @@ def write(
     )
     tri_face_points = mesh.points[face_three_first_nodes[grid.faces_per_cell]]
 
-    det = slicing_summing(
+    cell_centers = mesh.cell_centers().points
+    det = _slicing_summing(
         tri_face_points[:, 2] - tri_face_points[:, 1],
         tri_face_points[:, 0] - tri_face_points[:, 1],
         cell_centers[face_to_cell_idx] - tri_face_points[:, 1],
@@ -188,33 +138,33 @@ def write(
     # Generate property collection
     pc = None
 
-    if mesh.point_data or cell_data:
+    if mesh.point_data or mesh.cell_data:
         pc = GridPropertyCollection(grid)
 
         for k, v in mesh.point_data.items():
             _ = pc.add_cached_array_to_imported_list(
                 v,
-                source_info="meshio-resqml",
+                source_info="pyvista-resqml",
                 keyword=k,
                 indexable_element="nodes",
                 discrete=v[0].dtype.kind in {"i", "u"},
-                uom=uom[k] if k in uom else get_property_uom(mesh, k),
+                uom=uom[k] if k in uom else _get_property_uom(mesh, k),
             )
 
-        for k, v in cell_data.items():
+        for k, v in mesh.cell_data.items():
             _ = pc.add_cached_array_to_imported_list(
-                np.concatenate(v),
-                source_info="meshio-resqml",
+                v,
+                source_info="pyvista-resqml",
                 keyword=k,
                 indexable_element="cells",
-                discrete=v[0][0].dtype.kind in {"i", "u"},
-                uom=uom[k] if k in uom else get_property_uom(mesh, k),
+                discrete=v[0].dtype.kind in {"i", "u"},
+                uom=uom[k] if k in uom else _get_property_uom(mesh, k),
             )
 
     # Add a coordinate system
     crs = (
-        Crs(model, **mesh.info["resqml:crs"])
-        if isinstance(mesh.info, dict) and "resqml:crs" in mesh.info
+        Crs(model, **mesh.user_dict["crs"])
+        if "crs" in mesh.user_dict
         else Crs(model, z_inc_down=False)
     )
     grid.crs_uuid = crs.uuid
@@ -233,7 +183,7 @@ def write(
     model.store_epc()
 
 
-def slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
+def _slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
     """
     Calculate scalar triple product.
 
@@ -249,10 +199,55 @@ def slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
     return a[:, 0] * c0 + a[:, 1] * c1 + a[:, 2] * c2
 
 
-def get_property_uom(mesh: meshio.Mesh, key: str) -> str:
+def _get_property_uom(
+    mesh: pv.ExplicitStructuredGrid | pv.StructuredGrid | pv.UnstructuredGrid,
+    key: str,
+) -> str:
     """Get property's unit of measure, if any."""
     try:
-        return mesh.info["resqml:property"][key]["uom"]
+        return mesh.user_dict["property"][key]["uom"]
 
     except (KeyError, TypeError):
         return None
+
+
+_celltype_to_n_vertices = {
+    "TETRA": 4,
+    "PYRAMID": 5,
+    "WEDGE": 6,
+    "HEXAHEDRON": 8,
+}
+
+_celltype_to_faces = {
+    "TETRA": {
+        "TRIANGLE": np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]]),
+    },
+    "PYRAMID": {
+        "QUAD": np.array([[0, 3, 2, 1]]),
+        "TRIANGLE": np.array([[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]),
+    },
+    "WEDGE": {
+        "TRIANGLE": np.array([[0, 2, 1], [3, 4, 5]]),
+        "QUAD": np.array([[0, 1, 4, 3], [1, 2, 5, 4], [0, 3, 5, 2]]),
+    },
+    "HEXAHEDRON": {
+        "QUAD": np.array(
+            [
+                [0, 3, 2, 1],
+                [4, 5, 6, 7],
+                [0, 1, 5, 4],
+                [1, 2, 6, 5],
+                [2, 3, 7, 6],
+                [0, 4, 7, 3],
+            ]
+        ),
+    },
+}
+
+_celltype_to_cell_shape = {
+    "TETRA": "tetrahedral",
+    "PYRAMID": "pyramidal",
+    "WEDGE": "prism",
+    "HEXAHEDRON": "hexahedral",
+    "POLYHEDRON": "polyhedral",
+}

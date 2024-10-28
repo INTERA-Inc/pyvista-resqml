@@ -1,4 +1,4 @@
-meshio-resqml
+pyvista-resqml
 =============
 
-**meshio-resqml** is a **meshio** extension that add support to the RESQML format.
+**pyvista-resqml** is a **pyvista** extension that add support to the RESQML format.

@@ -5,7 +5,7 @@ import tarfile
 
 from invoke import task
 
-import meshio_resqml
+import pvresqml
 
 
 @task
@@ -21,17 +21,16 @@ def html(c):
 
 @task
 def tag(c):
-    c.run(f"git tag v{meshio_resqml.__version__}")
+    c.run(f"git tag v{pvresqml.__version__}")
     c.run("git push --tags")
 
 
 @task
 def clean(c, bytecode=False):
     patterns = [
-        ".pytest_cache",
         "build",
         "dist",
-        "meshio_resqml.egg-info",
+        "pyvista_resqml.egg-info",
         "doc/build",
         "doc/source/examples",
     ]
@@ -48,25 +47,9 @@ def clean(c, bytecode=False):
 
 
 @task
-def black(c):
-    c.run("black -t py38 meshio_resqml")
-    c.run("black -t py38 tests")
-
-
-@task
-def docstring(c):
-    c.run("docformatter -r -i --blank --wrap-summaries 88 --wrap-descriptions 88 --pre-summary-newline meshio_resqml")
-
-
-@task
-def isort(c):
-    c.run("isort meshio_resqml")
-    c.run("isort tests")
-
-
-@task
-def format(c):
-    c.run("invoke isort black docstring")
+def ruff(c):
+    c.run("ruff check --fix pvresqml")
+    c.run("ruff format --target-version py38 --line-length 88 pvresqml")
 
 
 @task
@@ -79,10 +62,9 @@ def tar(c):
         for pattern in patterns:
             if filename.name.endswith(pattern):
                 return None
-        
+
         return filename
 
-    with tarfile.open("meshio_resqml.tar.gz", "w:gz") as tf:
-        tf.add("meshio_resqml", arcname="meshio_resqml/meshio_resqml", filter=filter)
-        tf.add("pyproject.toml", arcname="meshio_resqml/pyproject.toml")
-        tf.add("setup.cfg", arcname="meshio_resqml/setup.cfg")
+    with tarfile.open("pvresqml.tar.gz", "w:gz") as tf:
+        tf.add("pvresqml", arcname="pvresqml/pvresqml", filter=filter)
+        tf.add("pyproject.toml", arcname="pvresqml/pyproject.toml")

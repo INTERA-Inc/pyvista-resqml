@@ -1,3 +1,102 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyvista-resqml"
+dynamic = ["version"]
+description = "RESQML extension for PyVista"
+readme = {file = "README.rst", content-type = "text/x-rst"}
+requires-python = ">=3.8"
+license = {text = "BSD 3-Clause License"}
+authors = [
+    {name = "Keurfon Luu", email = "kluu@intera.com"}
+]
+keywords = [
+    "geological modeling",
+    "pyvista",
+    "resqml",
+]
+classifiers = [
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Natural Language :: English",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "numpy >= 1.13.0",
+    "pyvista >= 0.36",
+    "resqpy >= 4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/keurfonluu/pyvista-resqml"
+Code = "https://github.com/keurfonluu/pyvista-resqml"
+Issues = "https://github.com/keurfonluu/pyvista-resqml/issues"
+
+[tool.setuptools.packages.find]
+include = ["pvresqml*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "pvresqml.__about__.__version__"}
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+exclude = [
+    "pvresqml/__about__.py"
+]
+
+[tool.ruff.lint]
+select = [
+    # docformatter, see <https://github.com/astral-sh/ruff/issues/1335>
+    "D104",
+    "D106",
+    "D200",
+    "D204",
+    "D206",
+    "D207",
+    "D208",
+    "D209",
+    "D210",
+    "D211",
+    "D213",
+    "D214",
+    "D215",
+    "D300",
+    "D301",
+    "D400",
+    "D403",
+    "D404",
+    "D405",
+    "D406",
+    "D407",
+    "D408",
+    "D409",
+    "D410",
+    "D411",
+    "D412",
+    "D413",
+    "D414",
+    "D415",
+    "D416",
+    "D418",
+    "D419",
+    # isort
+    "I",
+]
+
+[tool.ruff.lint.isort]
+force-wrap-aliases = true
+combine-as-imports = true
+from-first = false
+lines-after-imports = 2
+relative-imports-order = "closest-to-furthest"
