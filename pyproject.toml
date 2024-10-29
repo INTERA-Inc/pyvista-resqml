@@ -7,7 +7,7 @@ name = "pyvista-resqml"
 dynamic = ["version"]
 description = "RESQML extension for PyVista"
 readme = {file = "README.rst", content-type = "text/x-rst"}
-requires-python = ">=3.8"
+requires-python = ">=3.8, <3.12"
 license = {text = "BSD 3-Clause License"}
 authors = [
     {name = "Keurfon Luu", email = "kluu@intera.com"}
@@ -25,7 +25,6 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Natural Language :: English",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering",
