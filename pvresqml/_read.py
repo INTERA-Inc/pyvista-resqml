@@ -5,8 +5,8 @@ import os
 from typing import Optional
 
 import numpy as np
-from numpy.typing import ArrayLike
 import pyvista as pv
+from numpy.typing import ArrayLike
 from resqpy.crs import Crs
 from resqpy.grid import Grid, any_grid
 from resqpy.model import Model
@@ -136,7 +136,7 @@ def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid:
 
 
 def _read_unstructured_grid(
-    grid: HexaGrid | PrismGrid | PyramidGrid | TetraGrid | UnstructuredGrid
+    grid: HexaGrid | PrismGrid | PyramidGrid | TetraGrid | UnstructuredGrid,
 ) -> pv.UnstructuredGrid:
     """Read an UnstructuredGrid object."""
     points = grid.points_ref()

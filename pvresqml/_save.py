@@ -5,8 +5,8 @@ import pathlib
 from typing import Optional
 
 import numpy as np
-from numpy.typing import ArrayLike
 import pyvista as pv
+from numpy.typing import ArrayLike
 from resqpy.crs import Crs
 from resqpy.model import new_model
 from resqpy.property import GridPropertyCollection
@@ -50,7 +50,7 @@ def save(
         for location in locations:
             if location == -1:
                 continue
-            
+
             n_faces = polyhedral_cells[location]
             i, cell = location + 1, []
 
@@ -76,15 +76,19 @@ def save(
             n_vertices = _celltype_to_n_vertices[celltype]
             cells = connectivity.reshape((connectivity.size // n_vertices, n_vertices))
             cell_faces = [
-                [face for v in _celltype_to_faces[celltype].values() for face in cell[v]]
+                [
+                    face
+                    for v in _celltype_to_faces[celltype].values()
+                    for face in cell[v]
+                ]
                 for cell in cells
             ]
-        
+
     else:
         cell_shape = "polyhedral"
         offset = mesh.offset
         polyhedron_count, cell_faces = 0, []
-        
+
         for i, (i1, i2, celltype) in enumerate(zip(offset[:-1], offset[1:], celltypes)):
             celltype = pv.CellType(celltype).name
 
@@ -93,9 +97,13 @@ def save(
                 polyhedron_count += 1
 
             else:
-                cell = connectivity[i1 : i2]
-                cell_face = [face for v in _celltype_to_faces[celltype].values() for face in cell[v]]
-            
+                cell = connectivity[i1:i2]
+                cell_face = [
+                    face
+                    for v in _celltype_to_faces[celltype].values()
+                    for face in cell[v]
+                ]
+
             cell_faces.append(cell_face)
 
     face_map = {}

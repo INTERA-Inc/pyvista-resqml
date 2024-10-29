@@ -1,8 +1,8 @@
 from __future__ import annotations
-from numpy.typing import ArrayLike
 
 import numpy as np
 import pyvista as pv
+from numpy.typing import ArrayLike
 
 from .._common import generate_polyhedron_connectivity
 
@@ -73,7 +73,11 @@ def load_hexahedron_mesh() -> pv.UnstructuredGrid:
             [0.0, 1.0, 2.0],
         ]
     )
-    cells = {pv.CellType.HEXAHEDRON: np.array([[0, 1, 2, 3, 4, 5, 6, 7], [4, 5, 6, 7, 8, 9, 10, 11]])}
+    cells = {
+        pv.CellType.HEXAHEDRON: np.array(
+            [[0, 1, 2, 3, 4, 5, 6, 7], [4, 5, 6, 7, 8, 9, 10, 11]]
+        )
+    }
 
     return _load_from_points_cells(points, cells)
 
@@ -123,7 +127,7 @@ def load_hybrid_mesh() -> pv.UnstructuredGrid:
         3, 7, 9, 16,
         3, 7, 16, 14,
         4, 13, 14, 7, 4,
-    ]
+    ]  # fmt: skip
     celltypes = [
         pv.CellType.HEXAHEDRON,
         pv.CellType.PYRAMID,
@@ -210,7 +214,7 @@ def load_polyhedron_mesh() -> pv.UnstructuredGrid:
     celltypes = [pv.CellType.POLYHEDRON] * 3
 
     cells = []
-    
+
     for faces_ in faces:
         cells += generate_polyhedron_connectivity(faces_)
 
