@@ -40,29 +40,63 @@ def save(
             if f"BLOCK_{key}" in mesh.cell_data:
                 mesh.cell_data.pop(f"BLOCK_{key}", None)
 
+    # Generate polyhedral cell faces if any
+    polyhedral_cells = pv.convert_array(mesh.GetFaces())
+
+    if polyhedral_cells is not None:
+        locations = pv.convert_array(mesh.GetFaceLocations())
+        polyhedral_cell_faces = []
+
+        for location in locations:
+            if location == -1:
+                continue
+            
+            n_faces = polyhedral_cells[location]
+            i, cell = location + 1, []
+
+            while len(cell) < n_faces:
+                n_vertices = polyhedral_cells[i]
+                cell.append(polyhedral_cells[i + 1 : i + 1 + n_vertices])
+                i += n_vertices + 1
+
+            polyhedral_cell_faces.append(cell)
+
     # Generate face data
-    connectivity = mesh.cell_connectivity
-    offset = mesh.offset
     celltypes = mesh.celltypes
+    connectivity = mesh.cell_connectivity
 
     if celltypes.min() == celltypes.max():
-        celltype = pv.CellType(celltypes[0])
-        cell_shape = _celltype_to_cell_shape[celltype.name]
+        celltype = pv.CellType(celltypes[0]).name
+        cell_shape = _celltype_to_cell_shape[celltype]
 
-        if celltype.name == "POLYHEDRON":
-            raise NotImplementedError()
+        if celltype == "POLYHEDRON":
+            cell_faces = polyhedral_cell_faces
 
         else:
-            n_vertices = _celltype_to_n_vertices[celltype.name]
+            n_vertices = _celltype_to_n_vertices[celltype]
             cells = connectivity.reshape((connectivity.size // n_vertices, n_vertices))
             cell_faces = [
-                [face for v in _celltype_to_faces[celltype.name].values() for face in cell[v]]
+                [face for v in _celltype_to_faces[celltype].values() for face in cell[v]]
                 for cell in cells
             ]
         
     else:
         cell_shape = "polyhedral"
-        raise NotImplementedError()
+        offset = mesh.offset
+        polyhedron_count, cell_faces = 0, []
+        
+        for i, (i1, i2, celltype) in enumerate(zip(offset[:-1], offset[1:], celltypes)):
+            celltype = pv.CellType(celltype).name
+
+            if celltype == "POLYHEDRON":
+                cell_face = polyhedral_cell_faces[polyhedron_count]
+                polyhedron_count += 1
+
+            else:
+                cell = connectivity[i1 : i2]
+                cell_face = [face for v in _celltype_to_faces[celltype].values() for face in cell[v]]
+            
+            cell_faces.append(cell_face)
 
     face_map = {}
     nodes_per_face = []

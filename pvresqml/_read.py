@@ -19,6 +19,8 @@ from resqpy.unstructured import (
     UnstructuredGrid,
 )
 
+from ._common import generate_polyhedron_connectivity
+
 
 def read(
     filename: str | os.PathLike,
@@ -180,7 +182,7 @@ def _read_unstructured_grid(
             cell = to_hexahedron(cell)
 
         else:
-            raise NotImplementedError(f"cell type {celltype} is not supported")
+            cell = generate_polyhedron_connectivity(cell)[1:]
 
         cells += [len(cell), *cell]
 
