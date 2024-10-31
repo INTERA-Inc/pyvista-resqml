@@ -153,6 +153,14 @@ def save(
     grid.points_cached = np.array(mesh.points)
     grid.node_count = len(mesh.points)
 
+    # Add a coordinate system
+    crs = (
+        Crs(model, **mesh.user_dict["crs"])
+        if "crs" in mesh.user_dict
+        else Crs(model, z_inc_down=False)
+    )
+    grid.crs_uuid = crs.uuid
+
     # Determine right handedness of cell faces w.r.t. cell center
     # The calculation is based on the sign of the scalar product of the face normal vector
     # and a vector defined by the cell center and any point on the face
@@ -175,7 +183,7 @@ def save(
         tri_face_points[:, 0] - tri_face_points[:, 1],
         cell_centers[face_to_cell_idx] - tri_face_points[:, 1],
     )
-    grid.cell_face_is_right_handed = det >= 0.0
+    grid.cell_face_is_right_handed = det >= 0.0 if crs.z_inc_down else det <= 0.0
 
     # Generate property collection
     pc = None
@@ -202,14 +210,6 @@ def save(
                 discrete=v[0].dtype.kind in {"i", "u"},
                 uom=uom[k] if k in uom else _get_property_uom(mesh, k),
             )
-
-    # Add a coordinate system
-    crs = (
-        Crs(model, **mesh.user_dict["crs"])
-        if "crs" in mesh.user_dict
-        else Crs(model, z_inc_down=False)
-    )
-    grid.crs_uuid = crs.uuid
 
     # Write files
     h5_filename = f"{path.stem}.h5"
