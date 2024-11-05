@@ -8,7 +8,8 @@ import numpy as np
 import pyvista as pv
 from numpy.typing import ArrayLike
 from resqpy.crs import Crs
-from resqpy.model import new_model
+from resqpy.grid import Grid
+from resqpy.model import Model, new_model
 from resqpy.property import GridPropertyCollection
 from resqpy.unstructured import UnstructuredGrid
 
@@ -33,13 +34,112 @@ def save(
     """
     uom = uom if uom else {}
 
-    if isinstance(mesh, (pv.ExplicitStructuredGrid, pv.StructuredGrid)):
+    # Initialize path
+    path = pathlib.Path(filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Initialize model
+    model = new_model(str(filename))
+
+    # Generate grid
+    if isinstance(mesh, pv.StructuredGrid):
+        grid = _save_structured(mesh, model)
+
+    elif isinstance(mesh, (pv.ExplicitStructuredGrid, pv.UnstructuredGrid)):
         mesh = mesh.cast_to_unstructured_grid()
 
         for key in "IJK":
             if f"BLOCK_{key}" in mesh.cell_data:
                 mesh.cell_data.pop(f"BLOCK_{key}", None)
 
+        grid = _save_unstructured(mesh, model)
+
+    # Generate property collection
+    pc = None
+
+    if mesh.point_data or mesh.cell_data:
+        pc = GridPropertyCollection(grid)
+
+        for k, v in mesh.point_data.items():
+            _ = pc.add_cached_array_to_imported_list(
+                (
+                    v
+                    if isinstance(grid, UnstructuredGrid)
+                    else v.reshape(grid.extent_kji[[2, 1, 0]] + 1).transpose((2, 1, 0))
+                ),
+                source_info="pyvista-resqml",
+                keyword=k,
+                indexable_element="nodes",
+                discrete=v[0].dtype.kind in {"i", "u"},
+                uom=uom[k] if k in uom else _get_property_uom(mesh, k),
+            )
+
+        for k, v in mesh.cell_data.items():
+            _ = pc.add_cached_array_to_imported_list(
+                v if isinstance(grid, UnstructuredGrid) else v.reshape(grid.extent_kji),
+                source_info="pyvista-resqml",
+                keyword=k,
+                indexable_element="cells",
+                discrete=v[0].dtype.kind in {"i", "u"},
+                uom=uom[k] if k in uom else _get_property_uom(mesh, k),
+            )
+
+    # Add a coordinate system
+    crs = (
+        Crs(model, **mesh.user_dict["crs"])
+        if "crs" in mesh.user_dict
+        else Crs(model, z_inc_down=False)
+    )
+    grid.crs_uuid = crs.uuid
+
+    # Write files
+    h5_filename = f"{path.stem}.h5"
+    kwargs = {} if isinstance(grid, Grid) else {"write_active": True}
+
+    crs.create_xml()
+    grid.write_hdf5(h5_filename, **kwargs)
+    grid.create_xml(**kwargs)
+
+    if pc is not None:
+        pc.write_hdf5_for_imported_list(h5_filename)
+        pc.create_xml_for_imported_list_and_add_parts_to_model()
+
+    model.store_epc()
+
+
+def _save_structured(mesh: pv.StructuredGrid, model: Model) -> Grid:
+    """Save a structured grid."""
+    ni, nj, nk = mesh.dimensions
+    extent_kji = np.array([nk - 1, nj - 1, ni - 1], dtype=int)
+
+    points_cached = np.concatenate(
+        (
+            np.expand_dims(mesh.x.transpose((2, 1, 0)), axis=-1),
+            np.expand_dims(mesh.y.transpose((2, 1, 0)), axis=-1),
+            np.expand_dims(mesh.z.transpose((2, 1, 0)), axis=-1),
+        ),
+        axis=-1,
+    )
+
+    grid = Grid(model, find_properties=False, geometry_required=False)
+    grid.grid_representation = "IjkGrid"
+    grid.extent_kji = extent_kji
+    grid.nk, grid.nj, grid.ni = extent_kji
+    grid.points_cached = points_cached
+    grid.inactive = np.zeros(extent_kji, dtype=bool)
+
+    grid.k_direction_is_down = True
+    grid.grid_is_right_handed = True
+    grid.pillar_shape = "straight"
+    grid.has_split_coordinate_lines = False
+    grid.geometry_defined_for_all_pillars_cached = True
+    grid.geometry_defined_for_all_cells_cached = True
+
+    return grid
+
+
+def _save_unstructured(mesh: pv.UnstructuredGrid, model: Model) -> UnstructuredGrid:
+    """Save an unstructured grid."""
     # Generate polyhedral cell faces if any
     polyhedral_cells = pv.convert_array(mesh.GetFaces())
 
@@ -131,13 +231,6 @@ def save(
 
         faces_per_cell_cl.append(faces_per_cell_cl[-1] + len(cell))
 
-    # Initialize path
-    path = pathlib.Path(filename)
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Initialize model
-    model = new_model(str(filename))
-
     # Generate unstructured grid
     grid = UnstructuredGrid(
         model, find_properties=False, geometry_required=False, cell_shape=cell_shape
@@ -177,52 +270,7 @@ def save(
     )
     grid.cell_face_is_right_handed = det >= 0.0
 
-    # Generate property collection
-    pc = None
-
-    if mesh.point_data or mesh.cell_data:
-        pc = GridPropertyCollection(grid)
-
-        for k, v in mesh.point_data.items():
-            _ = pc.add_cached_array_to_imported_list(
-                v,
-                source_info="pyvista-resqml",
-                keyword=k,
-                indexable_element="nodes",
-                discrete=v[0].dtype.kind in {"i", "u"},
-                uom=uom[k] if k in uom else _get_property_uom(mesh, k),
-            )
-
-        for k, v in mesh.cell_data.items():
-            _ = pc.add_cached_array_to_imported_list(
-                v,
-                source_info="pyvista-resqml",
-                keyword=k,
-                indexable_element="cells",
-                discrete=v[0].dtype.kind in {"i", "u"},
-                uom=uom[k] if k in uom else _get_property_uom(mesh, k),
-            )
-
-    # Add a coordinate system
-    crs = (
-        Crs(model, **mesh.user_dict["crs"])
-        if "crs" in mesh.user_dict
-        else Crs(model, z_inc_down=False)
-    )
-    grid.crs_uuid = crs.uuid
-
-    # Write files
-    h5_filename = f"{path.stem}.h5"
-
-    crs.create_xml()
-    grid.write_hdf5(h5_filename, write_active=True)
-    grid.create_xml(write_active=True)
-
-    if pc is not None:
-        pc.write_hdf5_for_imported_list(h5_filename)
-        pc.create_xml_for_imported_list_and_add_parts_to_model()
-
-    model.store_epc()
+    return grid
 
 
 def _slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:

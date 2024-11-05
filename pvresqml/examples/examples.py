@@ -7,6 +7,15 @@ from numpy.typing import ArrayLike
 from .._common import generate_polyhedron_connectivity
 
 
+def load_structured_mesh() -> pv.StructuredGrid:
+    x = np.linspace(0.0, 5.0, 6)
+    y = np.linspace(0.0, 4.0, 5)
+    z = np.linspace(0.0, 3.0, 4)
+    mesh = pv.StructuredGrid(*np.meshgrid(x, y, z, indexing="ij"))
+
+    return _add_data(mesh)
+
+
 def load_tetra_mesh() -> pv.UnstructuredGrid:
     points = np.array(
         [
@@ -221,6 +230,20 @@ def load_polyhedron_mesh() -> pv.UnstructuredGrid:
     return _load_from_points_cells(points, cells, celltypes)
 
 
+def _add_data(
+    mesh: pv.StructuredGrid | pv.UnstructuredGrid,
+    add_point_data: bool = True,
+    add_cell_data: bool = True,
+) -> pv.StructuredGrid | pv.UnstructuredGrid:
+    if add_point_data:
+        mesh.point_data["PointIndex"] = np.arange(mesh.n_points)
+
+    if add_cell_data:
+        mesh.cell_data["CellIndex"] = np.arange(mesh.n_cells)
+
+    return mesh
+
+
 def _load_from_points_cells(
     points: ArrayLike,
     cells: dict | ArrayLike,
@@ -237,10 +260,4 @@ def _load_from_points_cells(
     else:
         raise ValueError("could not load grid from points and cells")
 
-    if add_point_data:
-        mesh.point_data["PointIndex"] = np.arange(mesh.n_points)
-
-    if add_cell_data:
-        mesh.cell_data["CellIndex"] = np.arange(mesh.n_cells)
-
-    return mesh
+    return _add_data(mesh, add_point_data, add_cell_data)
