@@ -92,15 +92,15 @@ def read(
 
         for uuid, title in zip(pc.uuids(), pc.titles()):
             prop = Property(model, uuid=uuid)
-            data = prop.array_ref().ravel()
+            data = prop.array_ref()
             data = data.astype(float) if prop.is_continuous() else data.astype(int)
             indexable_element = prop.indexable_element()
 
             if indexable_element == "nodes":
-                mesh.point_data[title] = data
+                mesh.point_data[title] = data.ravel(order="F")
 
             elif indexable_element == "cells":
-                mesh.cell_data[title] = data
+                mesh.cell_data[title] = data.ravel(order="C")
 
             property_dict[title] = {"uom": prop.uom()}
 
