@@ -134,7 +134,9 @@ def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid | pv.StructuredGrid:
         corners[::2, 1::2, 1::2] = corner_points[:, :, :, ::2, 1::2, 1::2].squeeze()
 
         corners = corners.reshape((8 * grid.ni * grid.nj * grid.nk, 3))
-        mesh = pv.ExplicitStructuredGrid((grid.ni + 1, grid.nj + 1, grid.nk + 1), corners)
+        mesh = pv.ExplicitStructuredGrid(
+            (grid.ni + 1, grid.nj + 1, grid.nk + 1), corners
+        )
 
     # Inactive cells
     inactive = grid.extract_inactive_mask().astype(bool)
