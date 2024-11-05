@@ -109,22 +109,32 @@ def read(
     return mesh
 
 
-def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid:
+def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid | pv.StructuredGrid:
     """Read a Grid object."""
-    corner_points = grid.corner_points()
+    nk, nj, ni = grid.extent_kji
 
-    corners = np.empty((2 * grid.nk, 2 * grid.nj, 2 * grid.ni, 3))
-    corners[::2, ::2, ::2] = corner_points[:, :, :, ::2, ::2, ::2].squeeze()
-    corners[1::2, ::2, ::2] = corner_points[:, :, :, 1::2, ::2, ::2].squeeze()
-    corners[1::2, 1::2, ::2] = corner_points[:, :, :, 1::2, 1::2, ::2].squeeze()
-    corners[::2, 1::2, ::2] = corner_points[:, :, :, ::2, 1::2, ::2].squeeze()
-    corners[::2, ::2, 1::2] = corner_points[:, :, :, ::2, ::2, 1::2].squeeze()
-    corners[1::2, ::2, 1::2] = corner_points[:, :, :, 1::2, ::2, 1::2].squeeze()
-    corners[1::2, 1::2, 1::2] = corner_points[:, :, :, 1::2, 1::2, 1::2].squeeze()
-    corners[::2, 1::2, 1::2] = corner_points[:, :, :, ::2, 1::2, 1::2].squeeze()
+    if grid.points_cached.shape[:3] == (nk + 1, nj + 1, ni + 1):
+        points = grid.points_cached.transpose((2, 1, 0, 3))
+        x = points[..., 0]
+        y = points[..., 1]
+        z = points[..., 2]
+        mesh = pv.StructuredGrid(x, y, z)
 
-    corners = corners.reshape((8 * grid.ni * grid.nj * grid.nk, 3))
-    mesh = pv.ExplicitStructuredGrid((grid.ni + 1, grid.nj + 1, grid.nk + 1), corners)
+    else:
+        corner_points = grid.corner_points()
+
+        corners = np.empty((2 * grid.nk, 2 * grid.nj, 2 * grid.ni, 3))
+        corners[::2, ::2, ::2] = corner_points[:, :, :, ::2, ::2, ::2].squeeze()
+        corners[1::2, ::2, ::2] = corner_points[:, :, :, 1::2, ::2, ::2].squeeze()
+        corners[1::2, 1::2, ::2] = corner_points[:, :, :, 1::2, 1::2, ::2].squeeze()
+        corners[::2, 1::2, ::2] = corner_points[:, :, :, ::2, 1::2, ::2].squeeze()
+        corners[::2, ::2, 1::2] = corner_points[:, :, :, ::2, ::2, 1::2].squeeze()
+        corners[1::2, ::2, 1::2] = corner_points[:, :, :, 1::2, ::2, 1::2].squeeze()
+        corners[1::2, 1::2, 1::2] = corner_points[:, :, :, 1::2, 1::2, 1::2].squeeze()
+        corners[::2, 1::2, 1::2] = corner_points[:, :, :, ::2, 1::2, 1::2].squeeze()
+
+        corners = corners.reshape((8 * grid.ni * grid.nj * grid.nk, 3))
+        mesh = pv.ExplicitStructuredGrid((grid.ni + 1, grid.nj + 1, grid.nk + 1), corners)
 
     # Inactive cells
     inactive = grid.extract_inactive_mask().astype(bool)
