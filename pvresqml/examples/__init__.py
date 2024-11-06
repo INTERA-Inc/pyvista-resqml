@@ -1,22 +1,22 @@
 """Examples module."""
 
 from .examples import (
-    load_hexahedron_mesh,
-    load_hybrid_mesh,
-    load_polyhedron_mesh,
-    load_pyramid_mesh,
-    load_structured_mesh,
-    load_tetra_mesh,
-    load_wedge_mesh,
+    load_hexahedron,
+    load_hybrid,
+    load_polyhedron,
+    load_pyramid,
+    load_structured,
+    load_tetra,
+    load_wedge,
 )
 
 
 __all__ = [
-    "load_structured_mesh",
-    "load_tetra_mesh",
-    "load_pyramid_mesh",
-    "load_wedge_mesh",
-    "load_hexahedron_mesh",
-    "load_hybrid_mesh",
-    "load_polyhedron_mesh",
+    "load_structured",
+    "load_tetra",
+    "load_pyramid",
+    "load_wedge",
+    "load_hexahedron",
+    "load_hybrid",
+    "load_polyhedron",
 ]

@@ -7,7 +7,16 @@ from numpy.typing import ArrayLike
 from .._common import generate_polyhedron_connectivity
 
 
-def load_structured_mesh() -> pv.StructuredGrid:
+def load_structured() -> pv.StructuredGrid:
+    """
+    Load structured grid.
+
+    Returns
+    -------
+    :class:`pv.StructuredGrid`
+        Structured grid.
+
+    """
     x = np.linspace(0.0, 5.0, 6)
     y = np.linspace(0.0, 4.0, 5)
     z = np.linspace(0.0, 3.0, 4)
@@ -16,7 +25,16 @@ def load_structured_mesh() -> pv.StructuredGrid:
     return _add_data(mesh)
 
 
-def load_tetra_mesh() -> pv.UnstructuredGrid:
+def load_tetra() -> pv.UnstructuredGrid:
+    """
+    Load unstructured grid with two tetrahedra.
+
+    Returns
+    -------
+    :class:`pv.UnstructuredGrid`
+        Unstructured grid.
+
+    """
     points = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -31,7 +49,16 @@ def load_tetra_mesh() -> pv.UnstructuredGrid:
     return _load_from_points_cells(points, cells)
 
 
-def load_pyramid_mesh() -> pv.UnstructuredGrid:
+def load_pyramid() -> pv.UnstructuredGrid:
+    """
+    Load unstructured grid with two pyramids.
+
+    Returns
+    -------
+    :class:`pv.UnstructuredGrid`
+        Unstructured grid.
+
+    """
     points = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -47,7 +74,16 @@ def load_pyramid_mesh() -> pv.UnstructuredGrid:
     return _load_from_points_cells(points, cells)
 
 
-def load_wedge_mesh() -> pv.UnstructuredGrid:
+def load_wedge() -> pv.UnstructuredGrid:
+    """
+    Load unstructured grid with two wedges.
+
+    Returns
+    -------
+    :class:`pv.UnstructuredGrid`
+        Unstructured grid.
+
+    """
     points = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -65,7 +101,16 @@ def load_wedge_mesh() -> pv.UnstructuredGrid:
     return _load_from_points_cells(points, cells)
 
 
-def load_hexahedron_mesh() -> pv.UnstructuredGrid:
+def load_hexahedron() -> pv.UnstructuredGrid:
+    """
+    Load unstructured grid with two hexahedra.
+
+    Returns
+    -------
+    :class:`pv.UnstructuredGrid`
+        Unstructured grid.
+
+    """
     points = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -91,7 +136,16 @@ def load_hexahedron_mesh() -> pv.UnstructuredGrid:
     return _load_from_points_cells(points, cells)
 
 
-def load_hybrid_mesh() -> pv.UnstructuredGrid:
+def load_hybrid() -> pv.UnstructuredGrid:
+    """
+    Load unstructured grid with different cell types.
+
+    Returns
+    -------
+    :class:`pv.UnstructuredGrid`
+        Unstructured grid.
+
+    """
     points = np.array(
         [
             [0.0, 0.0, 0.0],
@@ -151,7 +205,16 @@ def load_hybrid_mesh() -> pv.UnstructuredGrid:
     return _load_from_points_cells(points, cells, celltypes)
 
 
-def load_polyhedron_mesh() -> pv.UnstructuredGrid:
+def load_polyhedron() -> pv.UnstructuredGrid:
+    """
+    Load unstructured grid with three polyhedra.
+
+    Returns
+    -------
+    :class:`pv.UnstructuredGrid`
+        Unstructured grid.
+
+    """
     points = np.array(
         [
             [0.3568221, -0.49112344, 0.79465446],
@@ -235,6 +298,7 @@ def _add_data(
     add_point_data: bool = True,
     add_cell_data: bool = True,
 ) -> pv.StructuredGrid | pv.UnstructuredGrid:
+    """Add data to mesh."""
     if add_point_data:
         mesh.point_data["PointIndex"] = np.arange(mesh.n_points)
 
@@ -251,6 +315,7 @@ def _load_from_points_cells(
     add_point_data: bool = True,
     add_cell_data: bool = True,
 ) -> pv.UnstructuredGrid:
+    """Load mesh using points and cells."""
     if isinstance(cells, dict):
         mesh = pv.UnstructuredGrid(cells, points)
 
