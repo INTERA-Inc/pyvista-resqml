@@ -144,7 +144,9 @@ def _save_structured(mesh: pv.StructuredGrid, model: Model) -> Grid:
     return grid
 
 
-def _save_unstructured(mesh: pv.UnstructuredGrid, model: Model, z_inc_down: bool) -> UnstructuredGrid:
+def _save_unstructured(
+    mesh: pv.UnstructuredGrid, model: Model, z_inc_down: bool
+) -> UnstructuredGrid:
     """Save an unstructured grid."""
     # Generate polyhedral cell faces if any
     polyhedral_cells = pv.convert_array(mesh.GetFaces())
