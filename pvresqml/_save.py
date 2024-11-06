@@ -52,7 +52,13 @@ def save(
             if f"BLOCK_{key}" in mesh.cell_data:
                 mesh.cell_data.pop(f"BLOCK_{key}", None)
 
-        grid = _save_unstructured(mesh, model)
+        try:
+            z_inc_down = mesh.user_dict["crs"]["z_inc_down"]
+
+        except KeyError:
+            z_inc_down = False
+
+        grid = _save_unstructured(mesh, model, z_inc_down)
 
     # Generate property collection
     pc = None
@@ -138,7 +144,7 @@ def _save_structured(mesh: pv.StructuredGrid, model: Model) -> Grid:
     return grid
 
 
-def _save_unstructured(mesh: pv.UnstructuredGrid, model: Model) -> UnstructuredGrid:
+def _save_unstructured(mesh: pv.UnstructuredGrid, model: Model, z_inc_down: bool) -> UnstructuredGrid:
     """Save an unstructured grid."""
     # Generate polyhedral cell faces if any
     polyhedral_cells = pv.convert_array(mesh.GetFaces())
@@ -268,7 +274,7 @@ def _save_unstructured(mesh: pv.UnstructuredGrid, model: Model) -> UnstructuredG
         tri_face_points[:, 0] - tri_face_points[:, 1],
         cell_centers[face_to_cell_idx] - tri_face_points[:, 1],
     )
-    grid.cell_face_is_right_handed = det >= 0.0
+    grid.cell_face_is_right_handed = det >= 0.0 if z_inc_down else det <= 0.0
 
     return grid
 
