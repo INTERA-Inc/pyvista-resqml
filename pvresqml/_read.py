@@ -25,7 +25,7 @@ from ._common import generate_polyhedron_connectivity
 def read(
     filename: str | os.PathLike,
     grid_uuid: Optional[str] = None,
-) -> pv.ExplicitStructuredGrid | pv.UnstructuredGrid:
+) -> pv.ExplicitStructuredGrid | pv.StructuredGrid | pv.UnstructuredGrid:
     """
     Read RESQML EPC file.
 
@@ -38,7 +38,7 @@ def read(
 
     Returns
     -------
-    :class:`pyvista.ExplicitStructuredGrid` | :class:`pyvista.UnstructuredGrid`
+    :class:`pyvista.ExplicitStructuredGrid` | :class:`pyvista.StructuredGrid` | :class:`pyvista.UnstructuredGrid`
         Output mesh.
 
     """
