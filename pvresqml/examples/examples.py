@@ -7,11 +7,11 @@ import pyvista as pv
 
 from .._common import generate_polyhedron_connectivity
 
+
 if TYPE_CHECKING:
     from typing import Optional
 
     from numpy.typing import ArrayLike
-
 
 
 def load_structured() -> pv.StructuredGrid:

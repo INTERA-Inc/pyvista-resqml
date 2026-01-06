@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, cast, Union
+from typing import TYPE_CHECKING, Union, cast
 
 import numpy as np
 import pyvista as pv
@@ -19,6 +19,7 @@ from resqpy.unstructured import (
 )
 
 from ._common import generate_polyhedron_connectivity
+
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -142,7 +143,8 @@ def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid | pv.StructuredGrid:
 
         corners = corners.reshape((8 * grid.ni * grid.nj * grid.nk, 3))  # type: ignore
         mesh = pv.ExplicitStructuredGrid(
-            (grid.ni + 1, grid.nj + 1, grid.nk + 1), corners  # type: ignore
+            (grid.ni + 1, grid.nj + 1, grid.nk + 1),  # type: ignore
+            corners,
         )
 
     # Inactive cells
@@ -243,7 +245,7 @@ def to_pyramid(cell: list[list[int]]) -> list[int]:
 
     if not apex:
         raise ValueError("could not find apex for pyramid")
-    
+
     return base + apex
 
 

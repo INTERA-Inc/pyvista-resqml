@@ -12,6 +12,7 @@ from resqpy.model import Model, new_model
 from resqpy.property import GridPropertyCollection
 from resqpy.unstructured import UnstructuredGrid
 
+
 if TYPE_CHECKING:
     from typing import Optional
 
@@ -182,9 +183,7 @@ def _save_unstructured(
             cell
             if celltype == pv.CellType.POLYHEDRON
             else [
-                face
-                for v in _celltype_to_faces[celltype].values()
-                for face in cell[v]
+                face for v in _celltype_to_faces[celltype].values() for face in cell[v]
             ]
             for cell, celltype in zip(connectivity, celltypes)
         ]
