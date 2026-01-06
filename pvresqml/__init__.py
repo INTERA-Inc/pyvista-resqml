@@ -6,9 +6,7 @@ from ._read import read
 from ._save import save
 
 
-__all__ = [
-    "examples",
-    "read",
-    "save",
+__all__ = [x for x in dir() if not x.startswith("_")]  # type: ignore
+__all__ += [
     "__version__",
 ]

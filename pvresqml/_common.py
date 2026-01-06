@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import pyvista as pv
-from numpy.typing import ArrayLike
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
-def generate_polyhedron_connectivity(faces: list[ArrayLike]) -> ArrayLike:
+def generate_polyhedron_connectivity(faces: Sequence[Sequence[int]]) -> list[int]:
     """Generate connectivity for polyhedral cells."""
     connectivity = [len(faces)]
     for face in faces:

@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import os
 import pathlib
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pyvista as pv
-from numpy.typing import ArrayLike
 from resqpy.crs import Crs
 from resqpy.grid import Grid
 from resqpy.model import Model, new_model
 from resqpy.property import GridPropertyCollection
 from resqpy.unstructured import UnstructuredGrid
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from numpy.typing import ArrayLike, NDArray
 
 
 def save(
@@ -26,12 +30,14 @@ def save(
     ----------
     filename : str | PathLike
         Output file name.
-    mesh : :class:`pyvista.ExplicitStructuredGrid` | :class:`pyvista.StructuredGrid` | :class:`pyvista.UnstructuredGrid`
+    mesh : pyvista.ExplicitStructuredGrid | pyvista.StructuredGrid | pyvista.UnstructuredGrid
         Mesh to export.
     uom : dict, optional
-        Unit of measure for data arrays. Supercede unit of measures defined in key 'property' of :attr:`pyvista.DataSet.user_dict`.
+        Unit of measure for data arrays. Supercede unit of measures defined in key *property* of *pyvista.DataSet.user_dict*.
 
     """
+    from . import __version__ as version
+
     uom = uom if uom else {}
 
     # Initialize path
@@ -71,9 +77,9 @@ def save(
                 (
                     v
                     if isinstance(grid, UnstructuredGrid)
-                    else v.reshape(grid.extent_kji[[2, 1, 0]] + 1).transpose((2, 1, 0))
+                    else v.reshape(grid.extent_kji[[2, 1, 0]] + 1).transpose((2, 1, 0))  # type: ignore
                 ),
-                source_info="pyvista-resqml",
+                source_info=f"pyvista-resqml v{version}",
                 keyword=k,
                 indexable_element="nodes",
                 discrete=v[0].dtype.kind in {"i", "u"},
@@ -82,8 +88,8 @@ def save(
 
         for k, v in mesh.cell_data.items():
             _ = pc.add_cached_array_to_imported_list(
-                v if isinstance(grid, UnstructuredGrid) else v.reshape(grid.extent_kji),
-                source_info="pyvista-resqml",
+                v if isinstance(grid, UnstructuredGrid) else v.reshape(grid.extent_kji),  # type: ignore
+                source_info=f"pyvista-resqml v{version}",
                 keyword=k,
                 indexable_element="cells",
                 discrete=v[0].dtype.kind in {"i", "u"},
@@ -96,14 +102,14 @@ def save(
         if "crs" in mesh.user_dict
         else Crs(model, z_inc_down=False)
     )
-    grid.crs_uuid = crs.uuid
+    grid.crs_uuid = crs.uuid  # type: ignore
 
     # Write files
     h5_filename = f"{path.stem}.h5"
     kwargs = {} if isinstance(grid, Grid) else {"write_active": True}
 
     crs.create_xml()
-    grid.write_hdf5(h5_filename, **kwargs)
+    grid.write_hdf5(h5_filename, **kwargs)  # type: ignore
     grid.create_xml(**kwargs)
 
     if pc is not None:
@@ -129,17 +135,17 @@ def _save_structured(mesh: pv.StructuredGrid, model: Model) -> Grid:
 
     grid = Grid(model, find_properties=False, geometry_required=False)
     grid.grid_representation = "IjkGrid"
-    grid.extent_kji = extent_kji
+    grid.extent_kji = extent_kji  # type: ignore
     grid.nk, grid.nj, grid.ni = extent_kji
-    grid.points_cached = points_cached
-    grid.inactive = np.zeros(extent_kji, dtype=bool)
+    grid.points_cached = points_cached  # type: ignore
+    grid.inactive = np.zeros(extent_kji, dtype=bool)  # type: ignore
 
-    grid.k_direction_is_down = True
-    grid.grid_is_right_handed = True
+    grid.k_direction_is_down = True  # type: ignore
+    grid.grid_is_right_handed = True  # type: ignore
     grid.pillar_shape = "straight"
-    grid.has_split_coordinate_lines = False
-    grid.geometry_defined_for_all_pillars_cached = True
-    grid.geometry_defined_for_all_cells_cached = True
+    grid.has_split_coordinate_lines = False  # type: ignore
+    grid.geometry_defined_for_all_pillars_cached = True  # type: ignore
+    grid.geometry_defined_for_all_cells_cached = True  # type: ignore
 
     return grid
 
@@ -148,71 +154,40 @@ def _save_unstructured(
     mesh: pv.UnstructuredGrid, model: Model, z_inc_down: bool
 ) -> UnstructuredGrid:
     """Save an unstructured grid."""
-    # Generate polyhedral cell faces if any
-    polyhedral_cells = pv.convert_array(mesh.GetFaces())
-
-    if polyhedral_cells is not None:
-        locations = pv.convert_array(mesh.GetFaceLocations())
-        polyhedral_cell_faces = []
-
-        for location in locations:
-            if location == -1:
-                continue
-
-            n_faces = polyhedral_cells[location]
-            i, cell = location + 1, []
-
-            while len(cell) < n_faces:
-                n_vertices = polyhedral_cells[i]
-                cell.append(polyhedral_cells[i + 1 : i + 1 + n_vertices])
-                i += n_vertices + 1
-
-            polyhedral_cell_faces.append(cell)
+    from pvgridder import get_cell_connectivity
 
     # Generate face data
     celltypes = mesh.celltypes
-    connectivity = mesh.cell_connectivity
+    connectivity = get_cell_connectivity(mesh, flatten=False)
 
     if celltypes.min() == celltypes.max():
-        celltype = pv.CellType(celltypes[0]).name
+        celltype = celltypes[0]
         cell_shape = _celltype_to_cell_shape[celltype]
-
-        if celltype == "POLYHEDRON":
-            cell_faces = polyhedral_cell_faces
-
-        else:
-            n_vertices = _celltype_to_n_vertices[celltype]
-            cells = connectivity.reshape((connectivity.size // n_vertices, n_vertices))
-            cell_faces = [
+        cell_faces = (
+            connectivity
+            if celltype == pv.CellType.POLYHEDRON
+            else [
                 [
                     face
                     for v in _celltype_to_faces[celltype].values()
                     for face in cell[v]
                 ]
-                for cell in cells
+                for cell in connectivity
             ]
+        )
 
     else:
         cell_shape = "polyhedral"
-        offset = mesh.offset
-        polyhedron_count, cell_faces = 0, []
-
-        for i, (i1, i2, celltype) in enumerate(zip(offset[:-1], offset[1:], celltypes)):
-            celltype = pv.CellType(celltype).name
-
-            if celltype == "POLYHEDRON":
-                cell_face = polyhedral_cell_faces[polyhedron_count]
-                polyhedron_count += 1
-
-            else:
-                cell = connectivity[i1:i2]
-                cell_face = [
-                    face
-                    for v in _celltype_to_faces[celltype].values()
-                    for face in cell[v]
-                ]
-
-            cell_faces.append(cell_face)
+        cell_faces = [
+            cell
+            if celltype == pv.CellType.POLYHEDRON
+            else [
+                face
+                for v in _celltype_to_faces[celltype].values()
+                for face in cell[v]
+            ]
+            for cell, celltype in zip(connectivity, celltypes)
+        ]
 
     face_map = {}
     nodes_per_face = []
@@ -245,27 +220,27 @@ def _save_unstructured(
     )
     grid.set_cell_count(mesh.n_cells)
     grid.face_count = len(face_map)
-    grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)
-    grid.nodes_per_face_cl = np.array(nodes_per_face_cl[1:], dtype=int)
-    grid.faces_per_cell = np.array(faces_per_cell, dtype=int)
-    grid.faces_per_cell_cl = np.array(faces_per_cell_cl[1:], dtype=int)
+    grid.nodes_per_face = np.concatenate(nodes_per_face).astype(int)  # type: ignore
+    grid.nodes_per_face_cl = np.array(nodes_per_face_cl[1:], dtype=int)  # type: ignore
+    grid.faces_per_cell = np.array(faces_per_cell, dtype=int)  # type: ignore
+    grid.faces_per_cell_cl = np.array(faces_per_cell_cl[1:], dtype=int)  # type: ignore
 
     # Set point array
-    grid.points_cached = np.array(mesh.points)
+    grid.points_cached = np.array(mesh.points)  # type: ignore
     grid.node_count = len(mesh.points)
 
     # Determine right handedness of cell faces w.r.t. cell center
     # The calculation is based on the sign of the scalar product of the face normal vector
     # and a vector defined by the cell center and any point on the face
     face_to_cell_idx = np.searchsorted(
-        grid.faces_per_cell_cl - 1,
-        np.arange(grid.faces_per_cell.size),
+        grid.faces_per_cell_cl - 1,  # type: ignore
+        np.arange(grid.faces_per_cell.size),  # type: ignore
         side="left",
     )
 
-    face_first_node = np.insert(grid.nodes_per_face_cl[:-1], 0, 0)
+    face_first_node = np.insert(grid.nodes_per_face_cl[:-1], 0, 0)  # type: ignore
     face_three_first_idx = (face_first_node[:, None] + np.arange(3)).ravel()
-    face_three_first_nodes = grid.nodes_per_face[face_three_first_idx].reshape(
+    face_three_first_nodes = grid.nodes_per_face[face_three_first_idx].reshape(  # type: ignore
         (grid.face_count, 3)
     )
     tri_face_points = mesh.points[face_three_first_nodes[grid.faces_per_cell]]
@@ -276,12 +251,12 @@ def _save_unstructured(
         tri_face_points[:, 0] - tri_face_points[:, 1],
         cell_centers[face_to_cell_idx] - tri_face_points[:, 1],
     )
-    grid.cell_face_is_right_handed = det >= 0.0 if z_inc_down else det <= 0.0
+    grid.cell_face_is_right_handed = det >= 0.0 if z_inc_down else det <= 0.0  # type: ignore
 
     return grid
 
 
-def _slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
+def _slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> NDArray:
     """
     Calculate scalar triple product.
 
@@ -290,6 +265,10 @@ def _slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
     See <https://stackoverflow.com/a/42386330/353337>.
 
     """
+    a = np.asanyarray(a)
+    b = np.asanyarray(b)
+    c = np.asanyarray(c)
+
     c0 = b[:, 1] * c[:, 2] - b[:, 2] * c[:, 1]
     c1 = b[:, 2] * c[:, 0] - b[:, 0] * c[:, 2]
     c2 = b[:, 0] * c[:, 1] - b[:, 1] * c[:, 0]
@@ -300,7 +279,7 @@ def _slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> ArrayLike:
 def _get_property_uom(
     mesh: pv.ExplicitStructuredGrid | pv.StructuredGrid | pv.UnstructuredGrid,
     key: str,
-) -> str:
+) -> str | None:
     """Get property's unit of measure, if any."""
     try:
         return mesh.user_dict["property"][key]["uom"]
@@ -309,26 +288,19 @@ def _get_property_uom(
         return None
 
 
-_celltype_to_n_vertices = {
-    "TETRA": 4,
-    "PYRAMID": 5,
-    "WEDGE": 6,
-    "HEXAHEDRON": 8,
-}
-
 _celltype_to_faces = {
-    "TETRA": {
+    pv.CellType.TETRA: {
         "TRIANGLE": np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]]),
     },
-    "PYRAMID": {
+    pv.CellType.PYRAMID: {
         "QUAD": np.array([[0, 3, 2, 1]]),
         "TRIANGLE": np.array([[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]]),
     },
-    "WEDGE": {
+    pv.CellType.WEDGE: {
         "TRIANGLE": np.array([[0, 2, 1], [3, 4, 5]]),
         "QUAD": np.array([[0, 1, 4, 3], [1, 2, 5, 4], [0, 3, 5, 2]]),
     },
-    "HEXAHEDRON": {
+    pv.CellType.HEXAHEDRON: {
         "QUAD": np.array(
             [
                 [0, 3, 2, 1],
@@ -343,9 +315,9 @@ _celltype_to_faces = {
 }
 
 _celltype_to_cell_shape = {
-    "TETRA": "tetrahedral",
-    "PYRAMID": "pyramidal",
-    "WEDGE": "prism",
-    "HEXAHEDRON": "hexahedral",
-    "POLYHEDRON": "polyhedral",
+    pv.CellType.TETRA: "tetrahedral",
+    pv.CellType.PYRAMID: "pyramidal",
+    pv.CellType.WEDGE: "prism",
+    pv.CellType.HEXAHEDRON: "hexahedral",
+    pv.CellType.POLYHEDRON: "polyhedral",
 }
