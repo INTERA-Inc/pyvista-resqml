@@ -21,7 +21,10 @@ if TYPE_CHECKING:
 
 def save(
     filename: str | os.PathLike,
-    mesh: pv.ExplicitStructuredGrid | pv.StructuredGrid | pv.UnstructuredGrid,
+    mesh: pv.DataObject
+    | pv.ExplicitStructuredGrid
+    | pv.StructuredGrid
+    | pv.UnstructuredGrid,
     uom: Optional[dict] = None,
 ) -> None:
     """
@@ -31,7 +34,7 @@ def save(
     ----------
     filename : str | PathLike
         Output file name.
-    mesh : pyvista.ExplicitStructuredGrid | pyvista.StructuredGrid | pyvista.UnstructuredGrid
+    mesh : pyvista.DataObject | pyvista.ExplicitStructuredGrid | pyvista.StructuredGrid | pyvista.UnstructuredGrid
         Mesh to export.
     uom : dict, optional
         Unit of measure for data arrays. Supercede unit of measures defined in key *property* of *pyvista.DataSet.user_dict*.
