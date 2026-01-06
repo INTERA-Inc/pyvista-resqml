@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import itertools
 import os
-from typing import Optional
+from typing import TYPE_CHECKING, Union, cast
 
 import numpy as np
 import pyvista as pv
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 from resqpy.crs import Crs
 from resqpy.grid import Grid, any_grid
 from resqpy.model import Model
@@ -20,6 +19,10 @@ from resqpy.unstructured import (
 )
 
 from ._common import generate_polyhedron_connectivity
+
+
+if TYPE_CHECKING:
+    from typing import Optional
 
 
 def read(
@@ -38,14 +41,14 @@ def read(
 
     Returns
     -------
-    :class:`pyvista.ExplicitStructuredGrid` | :class:`pyvista.UnstructuredGrid`
+    pyvista.ExplicitStructuredGrid | pyvista.UnstructuredGrid
         Output mesh.
 
     """
     model = Model(str(filename))
 
     if grid_uuid is None:
-        for uuid, part in zip(model.uuids(), model.parts()):
+        for uuid, part in zip(model.uuids(), model.parts()):  # type: ignore
             if (
                 "IjkGridRepresentation" in part
                 or "UnstructuredGridRepresentation" in part
@@ -55,6 +58,7 @@ def read(
 
     try:
         grid = any_grid(model, uuid=grid_uuid)
+        grid = cast(Grid, grid)
         grid.cache_all_geometry_arrays()
 
     except AssertionError:
@@ -87,12 +91,13 @@ def read(
     # Read data arrays
     pc = grid.property_collection
 
-    if pc.number_of_parts():
+    if pc.number_of_parts():  # type: ignore
         property_dict = {}
 
-        for uuid, title in zip(pc.uuids(), pc.titles()):
+        for uuid, title in zip(pc.uuids(), pc.titles()):  # type: ignore
+            uuid, title = cast(str, uuid), cast(str, title)
             prop = Property(model, uuid=uuid)
-            data = prop.array_ref()
+            data = cast(NDArray, prop.array_ref())
             data = data.astype(float) if prop.is_continuous() else data.astype(int)
             indexable_element = prop.indexable_element()
 
@@ -106,15 +111,15 @@ def read(
 
         mesh.user_dict["property"] = property_dict
 
-    return mesh
+    return cast(Union[pv.ExplicitStructuredGrid, pv.UnstructuredGrid], mesh)
 
 
 def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid | pv.StructuredGrid:
     """Read a Grid object."""
-    nk, nj, ni = grid.extent_kji
+    nk, nj, ni = grid.extent_kji  # type: ignore
 
-    if grid.points_cached.shape[:3] == (nk + 1, nj + 1, ni + 1):
-        points = grid.points_cached.transpose((2, 1, 0, 3))
+    if grid.points_cached.shape[:3] == (nk + 1, nj + 1, ni + 1):  # type: ignore
+        points = grid.points_cached.transpose((2, 1, 0, 3))  # type: ignore
         x = points[..., 0]
         y = points[..., 1]
         z = points[..., 2]
@@ -123,7 +128,10 @@ def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid | pv.StructuredGrid:
     else:
         corner_points = grid.corner_points()
 
-        corners = np.empty((2 * grid.nk, 2 * grid.nj, 2 * grid.ni, 3))
+        if corner_points is None:
+            raise ValueError("could not read corner points for explicit grid")
+
+        corners = np.empty((2 * grid.nk, 2 * grid.nj, 2 * grid.ni, 3))  # type: ignore
         corners[::2, ::2, ::2] = corner_points[:, :, :, ::2, ::2, ::2].squeeze()
         corners[1::2, ::2, ::2] = corner_points[:, :, :, 1::2, ::2, ::2].squeeze()
         corners[1::2, 1::2, ::2] = corner_points[:, :, :, 1::2, 1::2, ::2].squeeze()
@@ -133,9 +141,10 @@ def _read_grid(grid: Grid) -> pv.ExplicitStructuredGrid | pv.StructuredGrid:
         corners[1::2, 1::2, 1::2] = corner_points[:, :, :, 1::2, 1::2, 1::2].squeeze()
         corners[::2, 1::2, 1::2] = corner_points[:, :, :, ::2, 1::2, 1::2].squeeze()
 
-        corners = corners.reshape((8 * grid.ni * grid.nj * grid.nk, 3))
+        corners = corners.reshape((8 * grid.ni * grid.nj * grid.nk, 3))  # type: ignore
         mesh = pv.ExplicitStructuredGrid(
-            (grid.ni + 1, grid.nj + 1, grid.nk + 1), corners
+            (grid.ni + 1, grid.nj + 1, grid.nk + 1),  # type: ignore
+            corners,
         )
 
     # Inactive cells
@@ -153,15 +162,15 @@ def _read_unstructured_grid(
     """Read an UnstructuredGrid object."""
     points = grid.points_ref()
 
-    nodes_per_face_cl = np.insert(grid.nodes_per_face_cl, 0, 0)
+    nodes_per_face_cl = np.insert(grid.nodes_per_face_cl, 0, 0)  # type: ignore
     nodes_per_face = [
-        grid.nodes_per_face[ibeg:iend]
+        grid.nodes_per_face[ibeg:iend]  # type: ignore
         for ibeg, iend in zip(nodes_per_face_cl[:-1], nodes_per_face_cl[1:])
     ]
 
-    faces_per_cell_cl = np.insert(grid.faces_per_cell_cl, 0, 0)
+    faces_per_cell_cl = np.insert(grid.faces_per_cell_cl, 0, 0)  # type: ignore
     faces_per_cell = [
-        grid.faces_per_cell[ibeg:iend]
+        grid.faces_per_cell[ibeg:iend]  # type: ignore
         for ibeg, iend in zip(faces_per_cell_cl[:-1], faces_per_cell_cl[1:])
     ]
 
@@ -203,7 +212,7 @@ def _read_unstructured_grid(
     return pv.UnstructuredGrid(cells, celltypes, points)
 
 
-def to_tetra(cell: ArrayLike) -> ArrayLike:
+def to_tetra(cell: list[list[int]]) -> list[int]:
     """Convert a face-based tetra to a node-based tetra."""
     base = cell[0]
     apex = list(set(cell[1]).difference(base))
@@ -214,14 +223,18 @@ def to_tetra(cell: ArrayLike) -> ArrayLike:
     return base + apex
 
 
-def to_pyramid(cell: ArrayLike) -> ArrayLike:
+def to_pyramid(cell: list[list[int]]) -> list[int]:
     """Convert a face-based pyramid to a node-based pyramid."""
-    apex = None
+    base: list[int] = []
+    apex: list[int] = []
 
     for c in cell:
         if len(c) == 4:
             base = c
             break
+
+    if not base:
+        raise ValueError("could not find base for pyramid")
 
     for c in cell:
         diff = set(c).difference(base)
@@ -230,16 +243,16 @@ def to_pyramid(cell: ArrayLike) -> ArrayLike:
             apex = list(diff)
             break
 
-    if apex is None:
+    if not apex:
         raise ValueError("could not find apex for pyramid")
 
     return base + apex
 
 
-def to_wedge(cell: ArrayLike) -> ArrayLike:
+def to_wedge(cell: list[list[int]]) -> list[int]:
     """Convert a face-based wedge to a node-based wedge."""
     face1, face_ = [c for c in cell if len(c) == 3]
-    face2 = []
+    face2: list[int] = []
 
     edge = face1[:2]
     edge_set = set(edge)
@@ -266,10 +279,10 @@ def to_wedge(cell: ArrayLike) -> ArrayLike:
     return face1 + face2
 
 
-def to_hexahedron(cell: ArrayLike) -> ArrayLike:
+def to_hexahedron(cell: list[list[int]]) -> list[int]:
     """Convert a face-based hexahedron to a node-based hexahedron."""
     face1 = cell[0]
-    face2 = []
+    face2: list[int] = []
 
     for edge in (face1[:2], face1[2:]):
         edge_set = set(edge)

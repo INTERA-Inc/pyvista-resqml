@@ -3,9 +3,7 @@ import os
 import shutil
 import tarfile
 
-from invoke import task
-
-import pvresqml
+from invoke.tasks import task
 
 
 @task
@@ -21,6 +19,8 @@ def html(c):
 
 @task
 def tag(c):
+    import pvresqml
+
     c.run(f"git tag v{pvresqml.__version__}")
     c.run("git push --tags")
 
@@ -49,7 +49,7 @@ def clean(c, bytecode=False):
 @task
 def ruff(c):
     c.run("ruff check --fix pvresqml")
-    c.run("ruff format --target-version py38 --line-length 88 pvresqml")
+    c.run("ruff format --target-version py39 --line-length 88 pvresqml")
 
 
 @task
@@ -68,3 +68,18 @@ def tar(c):
     with tarfile.open("pvresqml.tar.gz", "w:gz") as tf:
         tf.add("pvresqml", arcname="pvresqml/pvresqml", filter=filter)
         tf.add("pyproject.toml", arcname="pvresqml/pyproject.toml")
+
+
+@task
+def test(c, cov=False, html=False):
+    command = ["python -m pytest"]
+
+    if cov:
+        command += ["--cov", "pvresqml", "--cov-report", "term"]
+
+        if html:
+            command += ["--cov-report", "html"]
+
+    command += ["tests"]
+
+    c.run(" ".join(command))

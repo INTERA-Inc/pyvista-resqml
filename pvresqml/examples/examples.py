@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 import numpy as np
 import pyvista as pv
-from numpy.typing import ArrayLike
 
 from .._common import generate_polyhedron_connectivity
+
+
+if TYPE_CHECKING:
+    from typing import Optional
+
+    from numpy.typing import ArrayLike
 
 
 def load_structured() -> pv.StructuredGrid:
@@ -13,7 +20,7 @@ def load_structured() -> pv.StructuredGrid:
 
     Returns
     -------
-    :class:`pv.StructuredGrid`
+    pyvista.StructuredGrid
         Structured grid.
 
     """
@@ -22,7 +29,7 @@ def load_structured() -> pv.StructuredGrid:
     z = np.linspace(0.0, 3.0, 4)
     mesh = pv.StructuredGrid(*np.meshgrid(x, y, z, indexing="ij"))
 
-    return _add_data(mesh)
+    return cast(pv.StructuredGrid, _add_data(mesh))
 
 
 def load_tetra() -> pv.UnstructuredGrid:
@@ -31,7 +38,7 @@ def load_tetra() -> pv.UnstructuredGrid:
 
     Returns
     -------
-    :class:`pv.UnstructuredGrid`
+    pyvista.UnstructuredGrid
         Unstructured grid.
 
     """
@@ -55,7 +62,7 @@ def load_pyramid() -> pv.UnstructuredGrid:
 
     Returns
     -------
-    :class:`pv.UnstructuredGrid`
+    pyvista.UnstructuredGrid
         Unstructured grid.
 
     """
@@ -80,7 +87,7 @@ def load_wedge() -> pv.UnstructuredGrid:
 
     Returns
     -------
-    :class:`pv.UnstructuredGrid`
+    pyvista.UnstructuredGrid
         Unstructured grid.
 
     """
@@ -107,7 +114,7 @@ def load_hexahedron() -> pv.UnstructuredGrid:
 
     Returns
     -------
-    :class:`pv.UnstructuredGrid`
+    pyvista.UnstructuredGrid
         Unstructured grid.
 
     """
@@ -142,7 +149,7 @@ def load_hybrid() -> pv.UnstructuredGrid:
 
     Returns
     -------
-    :class:`pv.UnstructuredGrid`
+    pyvista.UnstructuredGrid
         Unstructured grid.
 
     """
@@ -211,7 +218,7 @@ def load_polyhedron() -> pv.UnstructuredGrid:
 
     Returns
     -------
-    :class:`pv.UnstructuredGrid`
+    pyvista.UnstructuredGrid
         Unstructured grid.
 
     """
@@ -325,4 +332,4 @@ def _load_from_points_cells(
     else:
         raise ValueError("could not load grid from points and cells")
 
-    return _add_data(mesh, add_point_data, add_cell_data)
+    return cast(pv.UnstructuredGrid, _add_data(mesh, add_point_data, add_cell_data))
