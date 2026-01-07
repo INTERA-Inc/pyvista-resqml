@@ -2,6 +2,8 @@
    <h1 align="center"><b>PyVista RESQML</b></h1>
 </p>
 
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](https://github.com/INTERA-Inc/pyvista-resqml/blob/master/LICENSE)
+[![Stars](https://img.shields.io/github/stars/INTERA-Inc/pyvista-resqml?style=flat&logo=github)](https://github.com/INTERA-Inc/pyvista-resqml)
 [![Pyversions](https://img.shields.io/pypi/pyversions/pyvista-resqml.svg?style=flat)](https://pypi.org/pypi/pyvista-resqml/)
 [![Version](https://img.shields.io/pypi/v/pyvista-resqml.svg?style=flat)](https://pypi.org/project/pyvista-resqml)
 [![Downloads](https://pepy.tech/badge/pyvista-resqml)](https://pepy.tech/project/pyvista-resqml)
@@ -39,7 +41,9 @@ To test the integrity of the installed package, check out this repository and ru
 pytest
 ```
 
-# Usage
+## Examples
+
+### Convert a GRDECL file to RESQML
 
 ```python
 import pyvista as pv
@@ -54,6 +58,8 @@ pvresqml.save("mesh.epc", mesh)
 # Read a RESQML file
 mesh_epc = pvresqml.read("mesh.epc")
 ```
+
+![mesh](https://github.com/INTERA-Inc/pyvista-resqml/blob/main/.github/mesh.png?raw=true)
 
 ## Acknowledgements
 
