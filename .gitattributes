@@ -1,0 +1,4 @@
+*.h5 linguist-generated=true
+*.epc linguist-generated=true
+*.GRDECL linguist-generated=true
+tests/support_files/* linguist-generated=true

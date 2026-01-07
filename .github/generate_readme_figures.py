@@ -1,6 +1,7 @@
 import pyvista as pv
 import pvresqml
 
+
 # Load a mesh (e.g., from GRDECL)
 mesh = pv.read("mesh.GRDECL")
 
@@ -16,6 +17,7 @@ p = pv.Plotter(
     shape=(1, 2),
     off_screen=True,
 )
+p.theme.font.color = "#808080"
 p.link_views()
 p.subplot(0, 0)
 p.add_mesh(mesh, scalars="PORO", show_edges=True)
