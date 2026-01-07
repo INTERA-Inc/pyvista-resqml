@@ -32,15 +32,14 @@ classifiers = [
 ]
 dependencies = [
     "numpy >= 1.13.0",
-    "pyvista-gridder >= 0.5",
+    "pyvista-gridder >= 0.5.3",
     "resqpy >= 5.0",
-    "shapely",
 ]
 
 [project.urls]
-Homepage = "https://github.com/keurfonluu/pyvista-resqml"
-Code = "https://github.com/keurfonluu/pyvista-resqml"
-Issues = "https://github.com/keurfonluu/pyvista-resqml/issues"
+Homepage = "https://github.com/INTERA-Inc/pyvista-resqml"
+Code = "https://github.com/INTERA-Inc/pyvista-resqml"
+Issues = "https://github.com/INTERA-Inc/pyvista-resqml/issues"
 
 [tool.setuptools.packages.find]
 include = ["pvresqml*"]
