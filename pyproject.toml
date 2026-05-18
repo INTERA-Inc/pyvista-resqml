@@ -41,6 +41,15 @@ Homepage = "https://github.com/INTERA-Inc/pyvista-resqml"
 Code = "https://github.com/INTERA-Inc/pyvista-resqml"
 Issues = "https://github.com/INTERA-Inc/pyvista-resqml/issues"
 
+# Register RESQML I/O with PyVista's pluggable reader/writer registry so
+# ``pyvista.read("mesh.epc")`` and ``mesh.save("mesh.epc")`` work once
+# ``pyvista-resqml`` is installed (PyVista >= 0.48).
+[project.entry-points."pyvista.readers"]
+".epc" = "pvresqml._plugin:read_resqml"
+
+[project.entry-points."pyvista.writers"]
+".epc" = "pvresqml._plugin:write_resqml"
+
 [tool.setuptools.packages.find]
 include = ["pvresqml*"]
 
