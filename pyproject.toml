@@ -31,9 +31,23 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "numpy >= 1.13.0",
+    "numpy >= 1.19.3",
     "pyvista-gridder >= 0.5.3",
     "resqpy >= 5.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "coverage",
+    "pytest",
+    "pytest-cov",
+]
+dev = [
+    "build",
+    "invoke",
+    "pyvista-resqml[test]",
+    "ruff",
+    "twine",
 ]
 
 [project.urls]
@@ -112,10 +126,19 @@ relative-imports-order = "closest-to-furthest"
 [tool.coverage.report]
 exclude_also = [
     "def __repr__",
+    "def _repr_html_",
     "except ModuleNotFoundError",
     "raise ModuleNotFoundError",
     "raise NotImplementedError",
     "raise TypeError",
     "raise ValueError",
+    "except RuntimeError",
+    "raise RuntimeError",
+    "except np.linalg.LinAlgError",
     "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.run]
+omit = [
+    "**/_typing.py",
 ]

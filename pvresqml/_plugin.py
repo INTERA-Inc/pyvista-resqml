@@ -30,7 +30,7 @@ def read_resqml(path: str, /, **kwargs: Any) -> pv.DataSet:
     path : str
         Input file name.
     **kwargs : Any
-        Forwarded to :func:`pvresqml.read` (e.g. ``grid_uuid``).
+        Forwarded to :func:`pvresqml.read` (e.g., ``grid_uuid``).
 
     Returns
     -------
@@ -52,7 +52,7 @@ def write_resqml(dataset: pv.DataObject, path: str, /, **kwargs: Any) -> None:
     path : str
         Output file name.
     **kwargs : Any
-        Forwarded to :func:`pvresqml.save` (e.g. ``uom``).
+        Forwarded to :func:`pvresqml.save` (e.g., ``uom``).
 
     """
     save(path, dataset, **kwargs)
