@@ -279,7 +279,10 @@ def _slicing_summing(a: ArrayLike, b: ArrayLike, c: ArrayLike) -> NDArray:
 
 
 def _get_property_uom(
-    mesh: pv.DataObject | pv.ExplicitStructuredGrid | pv.StructuredGrid | pv.UnstructuredGrid,
+    mesh: pv.DataObject
+    | pv.ExplicitStructuredGrid
+    | pv.StructuredGrid
+    | pv.UnstructuredGrid,
     key: str,
 ) -> str | None:
     """Get property's unit of measure, if any."""
