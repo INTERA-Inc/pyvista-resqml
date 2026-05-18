@@ -32,7 +32,7 @@ pip install pyvista-resqml --user
 Otherwise, clone and extract the package, then run from the package location:
 
 ```bash
-pip install .[full] --user
+pip install . --user
 ```
 
 To test the integrity of the installed package, check out this repository and run:
